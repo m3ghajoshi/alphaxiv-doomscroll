@@ -1,4 +1,6 @@
-# alphaXiv Doomscroll
+# alphaXiv Scroll
+
+> Repository: `alphaxiv-doomscroll`. App name in the UI: **alphaXiv Scroll**.
 
 A mobile-first, TikTok-style vertical feed of the **video explainers** for papers trending on
 [alphaXiv](https://www.alphaxiv.org/?sort=Hot). Swipe up for the next paper. Each video autoplays

@@ -145,7 +145,7 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
       <header className="safe-top pointer-events-none absolute inset-x-0 top-0 z-40 bg-gradient-to-b from-black/70 to-transparent">
         <div className="flex items-center justify-between px-4 py-3">
           <h1 className="text-[15px] font-extrabold tracking-tight">
-            alpha<span className="text-accent">X</span>iv <span className="font-medium text-white/70">Doomscroll</span>
+            alpha<span className="text-accent">X</span>iv <span className="font-medium text-white/70">Scroll</span>
           </h1>
           <span className="rounded-full border border-white/25 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide uppercase">
             Hot

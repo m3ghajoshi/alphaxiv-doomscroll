@@ -2,11 +2,11 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "alphaXiv Doomscroll",
+  title: "alphaXiv Scroll",
   description:
     "Swipe through video explainers of the papers trending on alphaXiv, TikTok-style.",
-  applicationName: "alphaXiv Doomscroll",
-  appleWebApp: { capable: true, title: "Doomscroll", statusBarStyle: "black-translucent" },
+  applicationName: "alphaXiv Scroll",
+  appleWebApp: { capable: true, title: "alphaXiv Scroll", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {
