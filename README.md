@@ -143,7 +143,7 @@ Every variable is optional. See [`.env.example`](.env.example).
 | `ALPHAXIV_MCP_URL`  | `https://api.alphaxiv.org/mcp/v1` | MCP endpoint (streamable HTTP) |
 | `ALPHAXIV_BASE_URL` | `https://www.alphaxiv.org`        | Where `/abs/<id>` pages are read from (MCP fallback) |
 | `HOT_FEED_LIMIT`    | `60`                              | Papers the MCP fallback scans (1 to 200) |
-| `CACHE_TTL_SECONDS` | `600`                             | How long server-side caches keep results |
+| `CACHE_TTL_SECONDS` | `1800`                            | How long the server keeps the built feed before re-reading alphaXiv. Feed pages are large (up to ~5 MB each with full author profiles), so a rebuild downloads roughly 20-40 MB |
 
 ### MCP configuration (optional fallback)
 

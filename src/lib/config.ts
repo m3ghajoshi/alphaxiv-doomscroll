@@ -74,7 +74,7 @@ const envSchema = z.object({
   ),
   CACHE_TTL_SECONDS: z.preprocess(
     emptyToUndefined,
-    z.coerce.number().int().min(0).max(86_400).default(600),
+    z.coerce.number().int().min(0).max(86_400).default(1800),
   ),
 });
 

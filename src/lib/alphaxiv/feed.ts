@@ -32,7 +32,9 @@ async function loadFromFeedApi(config: AppConfig): Promise<Catalog> {
     const url = buildFeedUrl(config.apiUrl, request.collection, request.pageNum, config.pageSize);
     try {
       const papers = parseFeedResponse(
-        await fetchJson(url, { revalidateSeconds: config.cacheTtlMs / 1000 }),
+        // Feed pages can be 4-5 MB (full author profiles), over Next's 2 MB fetch-cache
+        // limit. The parsed catalog is cached in memory instead, so skip the fetch cache.
+        await fetchJson(url, { revalidateSeconds: null, timeoutMs: 20_000 }),
       );
       if (papers === null) {
         throw new UpstreamError(

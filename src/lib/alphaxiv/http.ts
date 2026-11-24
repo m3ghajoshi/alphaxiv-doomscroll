@@ -17,8 +17,9 @@ const USER_AGENT =
 type FetchTextOptions = {
   accept?: string;
   timeoutMs?: number;
+  /** Seconds for Next's fetch cache, or null to skip it (e.g. for responses over its 2 MB limit). */
   retries?: number;
-  revalidateSeconds?: number;
+  revalidateSeconds?: number | null;
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -42,7 +43,9 @@ export async function fetchText(
       const response = await fetch(url, {
         headers: { "user-agent": USER_AGENT, accept },
         signal: AbortSignal.timeout(timeoutMs),
-        next: { revalidate: revalidateSeconds },
+        ...(revalidateSeconds === null
+          ? { cache: "no-store" as const }
+          : { next: { revalidate: revalidateSeconds } }),
       });
       if (response.status === 404) return null;
       if (response.ok) return await response.text();
