@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { VideoExplainer } from "@/lib/alphaxiv/types";
 import { primeVideosOnGesture } from "@/lib/media-unlock";
-import { PauseIcon, PlayIcon, RotateIcon, VolumeOffIcon, VolumeOnIcon } from "./icons";
+import { PlayIcon, RotateIcon, VolumeOffIcon, VolumeOnIcon } from "./icons";
 
 type Props = {
   explainer: VideoExplainer;
@@ -29,7 +29,7 @@ const DRIFT_TOLERANCE_S = 0.25;
 const HOLD_DELAY_MS = 280;
 const FAST_RATE = 2;
 const controlClass =
-  "grid size-11 place-items-center rounded-full bg-black/55 ring-1 ring-white/15 backdrop-blur transition active:scale-90";
+  "pointer-events-auto grid place-items-center rounded-full bg-black/55 ring-1 ring-white/15 backdrop-blur transition active:scale-90";
 /** While the active video should be playing but isn't, try again this often. */
 const RETRY_MS = 600;
 /** Events that count as a user gesture for media playback on mobile browsers. */
@@ -59,13 +59,13 @@ export function VideoStage({
   onToggleLandscape,
   onAutoplayBlocked,
 }: Props) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const backdropRef = useRef<HTMLVideoElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const [buffering, setBuffering] = useState(false);
   const [failed, setFailed] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [pulse, setPulse] = useState(0);
   const [fast, setFast] = useState(false);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holding = useRef(false);
@@ -146,7 +146,11 @@ export function VideoStage({
   // start) is what browsers count as a gesture that may start media.
   useEffect(() => {
     if (!active || !paused) return;
-    const start = () => startPlayback();
+    const start = (event: Event) => {
+      // A tap on this video is handled by its own tap handler (which plays it).
+      if (event.target instanceof Node && rootRef.current?.contains(event.target)) return;
+      startPlayback();
+    };
     GESTURE_EVENTS.forEach((name) => window.addEventListener(name, start, { capture: true, passive: true }));
     return () =>
       GESTURE_EVENTS.forEach((name) => window.removeEventListener(name, start, { capture: true }));
@@ -227,26 +231,6 @@ export function VideoStage({
 
   useEffect(() => () => clearHold(), [clearHold]);
 
-  const handleTap = useCallback(() => {
-    // A hold just ended: it was a speed-up, not a tap.
-    if (holding.current) {
-      holding.current = false;
-      return;
-    }
-    const video = videoRef.current;
-    if (!video) return;
-    if (video.paused) {
-      userPaused.current = false;
-      video.play().then(
-        () => setPaused(false),
-        () => setPaused(true),
-      );
-      return;
-    }
-    onToggleMute();
-    setPulse((value) => value + 1);
-  }, [onToggleMute]);
-
   const togglePause = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -262,6 +246,16 @@ export function VideoStage({
       setPaused(true);
     }
   }, []);
+
+  // Reels-style: a tap on the video pauses it (showing the controls) or resumes it.
+  const handleTap = useCallback(() => {
+    // A hold just ended: it was a speed-up, not a tap.
+    if (holding.current) {
+      holding.current = false;
+      return;
+    }
+    togglePause();
+  }, [togglePause]);
 
   const seek = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const video = videoRef.current;
@@ -279,7 +273,7 @@ export function VideoStage({
   };
 
   return (
-    <div className="absolute inset-0 isolate overflow-hidden bg-neutral-950">
+    <div ref={rootRef} className="absolute inset-0 isolate overflow-hidden bg-neutral-950">
       {/* Blurred, zoomed backdrop: poster image always, live video copy when active. */}
       <div
         aria-hidden="true"
@@ -313,7 +307,7 @@ export function VideoStage({
         onContextMenu={(event) => event.preventDefault()}
         style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
         className="absolute inset-0 z-10 cursor-pointer"
-        aria-label={paused ? `Play explainer for ${title}` : muted ? "Unmute" : "Mute"}
+        aria-label={paused ? `Play explainer for ${title}` : `Pause explainer for ${title}`}
       />
 
       {/* Centered 16:9 player, nudged up so the caption overlay doesn't cover it. */}
@@ -371,67 +365,43 @@ export function VideoStage({
         </div>
       </div>
 
-      {/* Video controls in one centered row: mute, pause, rotate. Below the video
-          in portrait; along the top of the video when sideways. */}
-      {active && !failed && (
-        <div className={`pointer-events-none absolute inset-x-0 ${frameTop} z-20 -translate-y-1/2`}>
-          <div className="relative mx-auto aspect-video" style={frameStyle}>
-            <div
-              className={`pointer-events-auto absolute left-1/2 flex -translate-x-1/2 items-center gap-4 ${
-                landscape ? "top-3" : "top-full mt-3"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={onToggleMute}
-                className={controlClass}
-                aria-label={muted ? "Unmute" : "Mute"}
-                aria-pressed={!muted}
-              >
-                {muted ? <VolumeOffIcon size={20} /> : <VolumeOnIcon size={20} />}
-              </button>
-              <button
-                type="button"
-                onClick={togglePause}
-                className={controlClass}
-                aria-label={paused ? "Play" : "Pause"}
-              >
-                {paused ? <PlayIcon size={20} /> : <PauseIcon size={20} />}
-              </button>
-              {onToggleLandscape && (
-                <button
-                  type="button"
-                  onClick={onToggleLandscape}
-                  className={controlClass}
-                  aria-label={landscape ? "Rotate back to portrait" : "Rotate to watch sideways"}
-                  aria-pressed={landscape}
-                >
-                  <RotateIcon size={20} />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Reels-style controls, shown only while paused: mute, play (large), rotate,
+          centered on the video. Tap the video again (or play) to resume and hide them. */}
       {active && paused && !failed && (
-        <div className={`pointer-events-none absolute ${frameTop} left-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/50 p-5`}>
-          <PlayIcon size={34} />
+        <div
+          className={`pointer-events-none absolute left-1/2 ${frameTop} z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-6`}
+        >
+          <button
+            type="button"
+            onClick={onToggleMute}
+            className={`${controlClass} size-12`}
+            aria-label={muted ? "Unmute" : "Mute"}
+            aria-pressed={!muted}
+          >
+            {muted ? <VolumeOffIcon size={22} /> : <VolumeOnIcon size={22} />}
+          </button>
+          <button type="button" onClick={togglePause} className={`${controlClass} size-16`} aria-label="Play">
+            <PlayIcon size={30} />
+          </button>
+          {onToggleLandscape ? (
+            <button
+              type="button"
+              onClick={onToggleLandscape}
+              className={`${controlClass} size-12`}
+              aria-label={landscape ? "Rotate back to portrait" : "Rotate to watch sideways"}
+              aria-pressed={landscape}
+            >
+              <RotateIcon size={22} />
+            </button>
+          ) : (
+            <span aria-hidden="true" className="size-12" />
+          )}
         </div>
       )}
 
       {fast && (
         <div className="pointer-events-none absolute top-28 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-sm font-bold backdrop-blur">
           2x ▸▸
-        </div>
-      )}
-
-      {pulse > 0 && (
-        <div
-          key={pulse}
-          className={`animate-pop pointer-events-none absolute ${frameTop} left-1/2 z-10 rounded-full bg-black/55 p-4`}
-        >
-          {muted ? <VolumeOffIcon size={30} /> : <VolumeOnIcon size={30} />}
         </div>
       )}
 

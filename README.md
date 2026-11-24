@@ -4,7 +4,7 @@
 
 A mobile-first, TikTok-style vertical feed of the **video explainers** for papers on
 [alphaXiv](https://www.alphaxiv.org). Swipe up for the next paper. Each video autoplays
-muted, and you tap it to turn the sound on. Every slide links back to the paper, its authors and its
+muted (tap "Tap for sound" to hear it), and tapping the video pauses it, Reels-style. Every slide links back to the paper, its authors and its
 discussion on alphaXiv.
 
 - **Hot first, then Most liked.** Papers come from alphaXiv's Hot list (30 days) in Hot order, then
@@ -84,7 +84,7 @@ on each slide therefore just says "alphaXiv Video Explainer" and makes no claim 
 │   ├── components/
 │   │   ├── Feed.tsx             # snap scroller, windowed rendering, paging, keyboard, toasts
 │   │   ├── Slide.tsx            # one full-screen entry
-│   │   ├── VideoStage.tsx       # blurred backdrop, centered 16:9 player, tap-to-mute, progress
+│   │   ├── VideoStage.tsx       # blurred backdrop, centered 16:9 player, tap-to-pause, controls, progress
 │   │   ├── Overlay.tsx          # rank, title, author tags, badge, summary
 │   │   ├── ActionBar.tsx        # upvotes, discussion, share, CC, read paper
 │   │   ├── ExpandableText.tsx   # two-line clamp with more/less
@@ -203,10 +203,10 @@ API. In that case the UI shows **Discuss**.
 | Gesture or key           | Action                                   |
 | ------------------------ | ---------------------------------------- |
 | Swipe / scroll, `↑` `↓` `j` `k` | Previous or next video            |
-| Tap the video, `m`       | Mute or unmute (applies to the whole feed) |
+| Tap the video            | Pause, showing mute, play and rotate buttons; tap again (or play) to resume and hide them |
+| "Tap for sound", `m`     | Mute or unmute (applies to the whole feed) |
 | Press and hold the video | Play at 2x speed until you let go        |
-| Pause button (bottom-right of the video) | Pause or resume; the smaller button above it mutes |
-| Rotate (circular arrows on the video)    | Sideways mode: the feed turns 90° so you can hold your phone sideways. Swiping still moves between videos |
+| Rotate (circular arrows, shown while paused) | Sideways mode: the feed turns 90° so you can hold your phone sideways. Swiping still moves between videos. Turning the phone itself also switches to the landscape layout |
 | Tap the progress bar     | Seek                                     |
 | CC                       | Captions on or off (alphaXiv provides WebVTT) |
 | more / less              | Expand the summary                       |
@@ -214,7 +214,8 @@ API. In that case the UI shows **Discuss**.
 The first video starts playing (muted) as soon as the page loads. If the browser blocks that, it
 starts on your first touch, click or key press anywhere. Browsers only allow sound after
 you tap, so if sound is blocked the feed switches back to muted autoplay rather than stopping. If a
-device blocks even muted autoplay (iOS Low Power Mode, for example), a play button appears.
+device blocks even muted autoplay (iOS Low Power Mode, for example), the play button appears and the
+next tap anywhere starts the video; each tap also unlocks the next few videos so they can autoplay.
 
 ## Deployment
 
