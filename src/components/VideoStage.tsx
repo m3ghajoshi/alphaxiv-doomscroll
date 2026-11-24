@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { VideoExplainer } from "@/lib/alphaxiv/types";
-import { FullscreenIcon, PauseIcon, PlayIcon, VolumeOffIcon, VolumeOnIcon } from "./icons";
+import { PauseIcon, PlayIcon, RotateIcon, VolumeOffIcon, VolumeOnIcon } from "./icons";
 
 type Props = {
   explainer: VideoExplainer;
@@ -14,7 +14,10 @@ type Props = {
   preload: boolean;
   muted: boolean;
   captionsOn: boolean;
+  /** Sideways mode: the video is centered and as large as the frame allows. */
+  landscape: boolean;
   onToggleMute: () => void;
+  onToggleLandscape: () => void;
   /** Called when the browser refuses to autoplay with sound. */
   onAutoplayBlocked: () => void;
 };
@@ -24,27 +27,6 @@ const DRIFT_TOLERANCE_S = 0.25;
 const HOLD_DELAY_MS = 280;
 const FAST_RATE = 2;
 
-type FullscreenVideo = HTMLVideoElement & { webkitEnterFullscreen?: () => void };
-type LockableOrientation = ScreenOrientation & { lock?: (orientation: string) => Promise<void> };
-
-/**
- * Plays the video full screen in landscape. Android/desktop use the Fullscreen
- * API plus an orientation lock where allowed; iPhone Safari only supports its
- * native video player (webkitEnterFullscreen), which rotates with the phone.
- */
-async function enterLandscapeFullscreen(video: FullscreenVideo) {
-  if (typeof video.requestFullscreen === "function") {
-    try {
-      video.controls = true;
-      await video.requestFullscreen({ navigationUI: "hide" });
-      await (screen.orientation as LockableOrientation | undefined)?.lock?.("landscape").catch(() => undefined);
-      return;
-    } catch {
-      video.controls = false;
-    }
-  }
-  video.webkitEnterFullscreen?.();
-}
 
 function setCaptionMode(video: HTMLVideoElement | null, mode: TextTrackMode) {
   const track = video?.textTracks[0];
@@ -64,7 +46,9 @@ export function VideoStage({
   preload,
   muted,
   captionsOn,
+  landscape,
   onToggleMute,
+  onToggleLandscape,
   onAutoplayBlocked,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -127,6 +111,15 @@ export function VideoStage({
     video.playbackRate = 1;
     if (video.currentTime > 0) video.currentTime = 0;
   }, [active, startPlayback]);
+
+  // If the browser refused to autoplay, start on the first touch, click or key press anywhere.
+  useEffect(() => {
+    if (!active || !paused || userPaused.current) return;
+    const start = () => startPlayback();
+    const events = ["pointerdown", "keydown", "touchstart"] as const;
+    events.forEach((name) => window.addEventListener(name, start, { once: true, passive: true }));
+    return () => events.forEach((name) => window.removeEventListener(name, start));
+  }, [active, paused, startPlayback]);
 
   // The muted *attribute* (not just the property) is what some mobile browsers
   // check before allowing autoplay, and React doesn't render it.
@@ -244,26 +237,6 @@ export function VideoStage({
     }
   }, []);
 
-  const openFullscreen = useCallback(() => {
-    const video = videoRef.current;
-    if (video) void enterLandscapeFullscreen(video);
-  }, []);
-
-  // Leaving full screen: hide native controls again and release the orientation lock.
-  useEffect(() => {
-    const onChange = () => {
-      if (document.fullscreenElement) return;
-      if (videoRef.current) videoRef.current.controls = false;
-      try {
-        screen.orientation?.unlock?.();
-      } catch {
-        // Not supported on this browser.
-      }
-    };
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, []);
-
   const seek = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const video = videoRef.current;
     if (!video || !(video.duration > 0)) return;
@@ -273,6 +246,11 @@ export function VideoStage({
   }, []);
 
   const backdropImage = explainer.poster ? `url("${explainer.poster}")` : undefined;
+  // Where the 16:9 frame sits: nudged up in portrait (room for the caption), centered sideways.
+  const frameTop = landscape ? "top-1/2" : "top-[30%]";
+  const frameStyle = {
+    width: landscape ? "min(100%, calc(var(--feed-h) * 16 / 9))" : "100%",
+  };
 
   return (
     <div className="absolute inset-0 isolate overflow-hidden bg-neutral-950">
@@ -313,8 +291,11 @@ export function VideoStage({
       />
 
       {/* Centered 16:9 player, nudged up so the caption overlay doesn't cover it. */}
-      <div className="pointer-events-none absolute inset-x-0 top-[30%] z-0 -translate-y-1/2">
-        <div className="relative mx-auto aspect-video w-full overflow-hidden shadow-2xl shadow-black/60 sm:rounded-lg">
+      <div className={`pointer-events-none absolute inset-x-0 ${frameTop} z-0 -translate-y-1/2`}>
+        <div
+          className="relative mx-auto aspect-video overflow-hidden shadow-2xl shadow-black/60 sm:rounded-lg"
+          style={frameStyle}
+        >
           <video
             ref={videoRef}
             className="h-full w-full bg-black object-contain"
@@ -323,6 +304,7 @@ export function VideoStage({
             crossOrigin="anonymous"
             playsInline
             muted
+            autoPlay={active}
             loop
             preload={active ? "auto" : preload ? "metadata" : "none"}
             disablePictureInPicture
@@ -363,18 +345,24 @@ export function VideoStage({
 
       {/* Reels-style controls on the video's corners: full screen (left); mute above pause (right). */}
       {active && !failed && (
-        <div className="pointer-events-none absolute inset-x-0 top-[30%] z-20 -translate-y-1/2">
-          <div className="relative mx-auto aspect-video w-full">
+        <div className={`pointer-events-none absolute inset-x-0 ${frameTop} z-20 -translate-y-1/2`}>
+          <div className="relative mx-auto aspect-video" style={frameStyle}>
             <button
               type="button"
-              onClick={openFullscreen}
-              className="pointer-events-auto absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1.5 text-[11px] font-semibold backdrop-blur transition active:scale-95"
-              aria-label="Watch full screen"
+              onClick={onToggleLandscape}
+              className={`pointer-events-auto absolute grid size-9 place-items-center rounded-full bg-black/55 backdrop-blur transition active:scale-90 ${
+                landscape ? "top-2 right-2" : "bottom-2 left-2"
+              }`}
+              aria-label={landscape ? "Rotate back to portrait" : "Rotate to watch sideways"}
+              aria-pressed={landscape}
             >
-              <FullscreenIcon size={14} />
-              Full screen
+              <RotateIcon size={18} />
             </button>
-            <div className="pointer-events-auto absolute right-2 bottom-2 flex flex-col items-center gap-1.5">
+            <div
+              className={`pointer-events-auto absolute flex items-center gap-1.5 ${
+                landscape ? "top-2 right-12 flex-row" : "right-2 bottom-2 flex-col"
+              }`}
+            >
               <button
                 type="button"
                 onClick={onToggleMute}
@@ -398,7 +386,7 @@ export function VideoStage({
       )}
 
       {active && paused && !failed && (
-        <div className="pointer-events-none absolute top-[30%] left-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/50 p-5">
+        <div className={`pointer-events-none absolute ${frameTop} left-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/50 p-5`}>
           <PlayIcon size={34} />
         </div>
       )}
@@ -412,7 +400,7 @@ export function VideoStage({
       {pulse > 0 && (
         <div
           key={pulse}
-          className="animate-pop pointer-events-none absolute top-[30%] left-1/2 z-10 rounded-full bg-black/55 p-4"
+          className={`animate-pop pointer-events-none absolute ${frameTop} left-1/2 z-10 rounded-full bg-black/55 p-4`}
         >
           {muted ? <VolumeOffIcon size={30} /> : <VolumeOnIcon size={30} />}
         </div>

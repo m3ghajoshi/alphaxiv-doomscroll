@@ -206,12 +206,13 @@ API. In that case the UI shows **Discuss**.
 | Tap the video, `m`       | Mute or unmute (applies to the whole feed) |
 | Press and hold the video | Play at 2x speed until you let go        |
 | Pause button (bottom-right of the video) | Pause or resume; the smaller button above it mutes |
-| Full screen (bottom-left of the video)   | Watch landscape full screen; turn your phone sideways |
+| Rotate (circular arrows on the video)    | Sideways mode: the feed turns 90° so you can hold your phone sideways. Swiping still moves between videos |
 | Tap the progress bar     | Seek                                     |
 | CC                       | Captions on or off (alphaXiv provides WebVTT) |
 | more / less              | Expand the summary                       |
 
-The first video starts playing (muted) as soon as the page loads. Browsers only allow sound after
+The first video starts playing (muted) as soon as the page loads. If the browser blocks that, it
+starts on your first touch, click or key press anywhere. Browsers only allow sound after
 you tap, so if sound is blocked the feed switches back to muted autoplay rather than stopping. If a
 device blocks even muted autoplay (iOS Low Power Mode, for example), a play button appears.
 

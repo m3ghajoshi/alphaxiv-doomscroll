@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { FeedItem, FeedPage } from "@/lib/alphaxiv/types";
 import { useActiveIndex } from "@/hooks/useActiveIndex";
 import { Slide } from "./Slide";
@@ -16,6 +16,23 @@ type Props = {
 const RENDER_WINDOW = 2;
 /** Start fetching the next page when this close to the end. */
 const PREFETCH_THRESHOLD = 2;
+
+const PORTRAIT_QUERY = "(orientation: portrait)";
+
+function subscribeToOrientation(onChange: () => void) {
+  const query = window.matchMedia(PORTRAIT_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+/** True while the screen is taller than it is wide. */
+function useIsPortrait() {
+  return useSyncExternalStore(
+    subscribeToOrientation,
+    () => window.matchMedia(PORTRAIT_QUERY).matches,
+    () => true,
+  );
+}
 
 async function fetchPage(cursor: number, limit: number, signal?: AbortSignal): Promise<FeedPage> {
   const response = await fetch(`/api/feed?cursor=${cursor}&limit=${limit}`, { signal });
@@ -38,6 +55,21 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
   const [error, setError] = useState<string | null>(initialError);
   const [muted, setMuted] = useState(true);
   const [captionsOn, setCaptionsOn] = useState(false);
+  const [landscape, setLandscape] = useState(false);
+  const isPortrait = useIsPortrait();
+  // Sideways mode on a portrait screen: turn the whole feed 90° so it fills the
+  // phone held sideways, while vertical swiping between videos keeps working.
+  const rotated = landscape && isPortrait;
+  const activeIndexRef = useRef(activeIndex);
+  useEffect(() => {
+    activeIndexRef.current = activeIndex;
+  }, [activeIndex]);
+
+  // Keep the same video in view when the layout switches between portrait and sideways.
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current;
+    if (scroller) scroller.scrollTop = activeIndexRef.current * scroller.clientHeight;
+  }, [landscape, rotated]);
   const [toast, setToast] = useState<string | null>(null);
   const inFlight = useRef(false);
 
@@ -97,6 +129,7 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
 
   const toggleMute = useCallback(() => setMuted((value) => !value), []);
   const toggleCaptions = useCallback(() => setCaptionsOn((value) => !value), []);
+  const toggleLandscape = useCallback(() => setLandscape((value) => !value), []);
   const autoplayBlocked = useCallback(() => setMuted(true), []);
   const notify = useCallback((message: string) => setToast(message), []);
 
@@ -128,7 +161,9 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
                 preload={distance === 1}
                 muted={muted}
                 captionsOn={captionsOn}
+                landscape={landscape}
                 onToggleMute={toggleMute}
+                onToggleLandscape={toggleLandscape}
                 onToggleCaptions={toggleCaptions}
                 onAutoplayBlocked={autoplayBlocked}
                 onNotify={notify}
@@ -137,18 +172,39 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
           </section>
         );
       }),
-    [items, activeIndex, observe, muted, captionsOn, toggleMute, toggleCaptions, autoplayBlocked, notify],
+    [
+      items,
+      activeIndex,
+      observe,
+      muted,
+      captionsOn,
+      landscape,
+      toggleMute,
+      toggleLandscape,
+      toggleCaptions,
+      autoplayBlocked,
+      notify,
+    ],
   );
 
   return (
-    <main className="relative mx-auto h-dvh w-full max-w-[calc(100dvh*9/16)] bg-black sm:border-x sm:border-white/10">
+    <main
+      className={
+        rotated
+          ? "rotated-shell bg-black"
+          : landscape
+            ? "relative h-dvh w-full bg-black"
+            : "relative mx-auto h-dvh w-full max-w-[calc(100dvh*9/16)] bg-black sm:border-x sm:border-white/10"
+      }
+      style={{ "--feed-h": rotated ? "100vw" : "100dvh" } as React.CSSProperties}
+    >
       <header className="safe-top pointer-events-none absolute inset-x-0 top-0 z-40 bg-gradient-to-b from-black/70 to-transparent">
         <div className="flex items-center justify-between px-4 py-3">
           <h1 className="text-[15px] font-extrabold tracking-tight">
             alpha<span className="text-accent">X</span>iv <span className="font-medium text-white/70">Scroll</span>
           </h1>
         </div>
-        {muted && items.length > 0 && (
+        {muted && items.length > 0 && !landscape && (
           <button
             type="button"
             onClick={toggleMute}

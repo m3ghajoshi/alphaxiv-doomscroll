@@ -9,10 +9,11 @@ import { EyeIcon, SparkIcon } from "./icons";
 const VISIBLE_AUTHORS = 3;
 
 /** Bottom-left caption: rank, title, author tags, explainer badge and summary. */
-export function Overlay({ item }: { item: FeedItem }) {
+export function Overlay({ item, compact = false }: { item: FeedItem; compact?: boolean }) {
   const [showAllAuthors, setShowAllAuthors] = useState(false);
-  const authors = showAllAuthors ? item.authors : item.authors.slice(0, VISIBLE_AUTHORS);
-  const hiddenAuthors = item.authors.length - VISIBLE_AUTHORS;
+  const visible = compact ? 2 : VISIBLE_AUTHORS;
+  const authors = showAllAuthors ? item.authors : item.authors.slice(0, visible);
+  const hiddenAuthors = item.authors.length - visible;
 
   return (
     <div className="pointer-events-auto flex flex-col gap-2 pr-2">
@@ -34,7 +35,9 @@ export function Overlay({ item }: { item: FeedItem }) {
         )}
       </div>
 
-      <h2 className="text-[17px] leading-tight font-bold text-balance drop-shadow">
+      <h2
+        className={`leading-tight font-bold text-balance drop-shadow ${compact ? "line-clamp-2 text-[15px]" : "text-[17px]"}`}
+      >
         <a href={item.paperUrl} target="_blank" rel="noopener noreferrer" className="hover:underline">
           {item.title}
         </a>
@@ -78,7 +81,7 @@ export function Overlay({ item }: { item: FeedItem }) {
         </ul>
       )}
 
-      <ExpandableText text={item.summary} lines={2} />
+      {!compact && <ExpandableText text={item.summary} lines={2} />}
     </div>
   );
 }

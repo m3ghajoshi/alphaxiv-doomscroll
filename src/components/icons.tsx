@@ -102,8 +102,10 @@ export const PauseIcon = (props: IconProps) => (
   </Svg>
 );
 
-export const FullscreenIcon = (props: IconProps) => (
+export const RotateIcon = (props: IconProps) => (
   <Svg {...props}>
-    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+    <path d="M21 12a9 9 0 0 1-15.5 6.2" />
+    <path d="M3 12a9 9 0 0 1 15.5-6.2" />
+    <path d="M18.5 2v4h-4M5.5 22v-4h4" />
   </Svg>
 );

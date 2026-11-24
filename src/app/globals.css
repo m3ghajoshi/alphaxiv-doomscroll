@@ -25,7 +25,7 @@ body {
 /* The vertical, snapping scroll container. */
 .feed-scroller {
   height: 100vh; /* fallback for browsers without dvh */
-  height: 100dvh;
+  height: var(--feed-h, 100dvh);
   overflow-y: scroll;
   scroll-snap-type: y mandatory;
   overscroll-behavior-y: contain;
@@ -38,9 +38,22 @@ body {
 
 .feed-slide {
   height: 100vh;
-  height: 100dvh;
+  height: var(--feed-h, 100dvh);
   scroll-snap-align: start;
   scroll-snap-stop: always;
+}
+
+/* Sideways mode on a portrait screen: the feed is laid out landscape and turned 90°. */
+.rotated-shell {
+  position: fixed;
+  top: 0;
+  left: 100vw;
+  width: 100vh;
+  width: 100dvh;
+  height: 100vw;
+  overflow: hidden;
+  transform-origin: top left;
+  transform: rotate(90deg);
 }
 
 .safe-bottom {

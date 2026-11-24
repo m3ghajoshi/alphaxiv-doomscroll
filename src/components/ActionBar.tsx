@@ -7,6 +7,8 @@ import { CaptionsIcon, CommentIcon, PaperIcon, ShareIcon, UpvoteIcon } from "./i
 
 type Props = {
   item: FeedItem;
+  /** Sideways mode: smaller buttons, no text labels except counts. */
+  compact?: boolean;
   captionsOn: boolean;
   onToggleCaptions: () => void;
   onNotify: (message: string) => void;
@@ -18,7 +20,9 @@ const bubbleClass =
   "grid size-10 place-items-center rounded-full bg-black/35 ring-1 ring-white/15 backdrop-blur transition active:scale-90";
 
 /** Right-hand action column: upvotes, discussion, share, captions, read paper. */
-export function ActionBar({ item, captionsOn, onToggleCaptions, onNotify }: Props) {
+export function ActionBar({ item, compact = false, captionsOn, onToggleCaptions, onNotify }: Props) {
+  const bubble = compact ? bubbleClass.replace("size-10", "size-9") : bubbleClass;
+  const label = (text: string) => (compact ? null : text);
   const [sharing, setSharing] = useState(false);
 
   const share = useCallback(async () => {
@@ -45,7 +49,10 @@ export function ActionBar({ item, captionsOn, onToggleCaptions, onNotify }: Prop
   }, [item.paperUrl, item.title, onNotify, sharing]);
 
   return (
-    <nav className="pointer-events-auto flex flex-col items-center gap-3" aria-label="Paper actions">
+    <nav
+      className={`pointer-events-auto flex flex-col items-center ${compact ? "gap-2" : "gap-3"}`}
+      aria-label="Paper actions"
+    >
       <a
         href={item.paperUrl}
         target="_blank"
@@ -53,7 +60,7 @@ export function ActionBar({ item, captionsOn, onToggleCaptions, onNotify }: Prop
         className={buttonClass}
         aria-label={`Upvote on alphaXiv${item.likes !== null ? ` (${item.likes} upvotes)` : ""}`}
       >
-        <span className={bubbleClass}>
+        <span className={bubble}>
           <UpvoteIcon size={22} />
         </span>
         {item.likes !== null ? formatCount(item.likes) : "Upvote"}
@@ -66,17 +73,17 @@ export function ActionBar({ item, captionsOn, onToggleCaptions, onNotify }: Prop
         className={buttonClass}
         aria-label={`Open discussion${item.comments !== null ? ` (${item.comments} comments)` : ""}`}
       >
-        <span className={bubbleClass}>
+        <span className={bubble}>
           <CommentIcon size={20} />
         </span>
         {item.comments !== null ? formatCount(item.comments) : "Discuss"}
       </a>
 
       <button type="button" onClick={share} className={buttonClass} aria-label="Share paper">
-        <span className={bubbleClass}>
+        <span className={bubble}>
           <ShareIcon size={20} />
         </span>
-        Share
+        {label("Share")}
       </button>
 
       {item.explainer.captions && (
@@ -87,10 +94,10 @@ export function ActionBar({ item, captionsOn, onToggleCaptions, onNotify }: Prop
           aria-pressed={captionsOn}
           aria-label={captionsOn ? "Hide captions" : "Show captions"}
         >
-          <span className={`${bubbleClass} ${captionsOn ? "bg-white text-black" : ""}`}>
+          <span className={`${bubble} ${captionsOn ? "bg-white text-black" : ""}`}>
             <CaptionsIcon size={20} />
           </span>
-          CC
+          {label("CC")}
         </button>
       )}
 
@@ -104,7 +111,7 @@ export function ActionBar({ item, captionsOn, onToggleCaptions, onNotify }: Prop
         <span className="grid size-10 place-items-center rounded-full bg-accent ring-1 ring-white/30 transition active:scale-90">
           <PaperIcon size={20} />
         </span>
-        Read
+        {label("Read")}
       </a>
     </nav>
   );
