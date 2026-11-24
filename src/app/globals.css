@@ -54,6 +54,28 @@ body {
   overflow: hidden;
   transform-origin: top left;
   transform: rotate(90deg);
+  /* The phone's top (notch) is now on the left and its bottom (home bar) on the right. */
+  padding-left: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-bottom);
+}
+.rotated-shell .safe-top,
+.rotated-shell .safe-bottom {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* A phone held sideways: keep content clear of the notch. */
+.safe-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Long presses are for 2x speed: no link previews, callouts or text selection. */
+.no-callout,
+.no-callout * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .safe-bottom {

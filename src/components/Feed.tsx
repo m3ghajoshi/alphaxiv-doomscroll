@@ -17,21 +17,16 @@ const RENDER_WINDOW = 2;
 /** Start fetching the next page when this close to the end. */
 const PREFETCH_THRESHOLD = 2;
 
-const PORTRAIT_QUERY = "(orientation: portrait)";
-
-function subscribeToOrientation(onChange: () => void) {
-  const query = window.matchMedia(PORTRAIT_QUERY);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-}
-
-/** True while the screen is taller than it is wide. */
-function useIsPortrait() {
-  return useSyncExternalStore(
-    subscribeToOrientation,
-    () => window.matchMedia(PORTRAIT_QUERY).matches,
-    () => true,
+function useMediaQuery(query: string, serverValue: boolean) {
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const list = window.matchMedia(query);
+      list.addEventListener("change", onChange);
+      return () => list.removeEventListener("change", onChange);
+    },
+    [query],
   );
+  return useSyncExternalStore(subscribe, () => window.matchMedia(query).matches, () => serverValue);
 }
 
 async function fetchPage(cursor: number, limit: number, signal?: AbortSignal): Promise<FeedPage> {
@@ -55,11 +50,24 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
   const [error, setError] = useState<string | null>(initialError);
   const [muted, setMuted] = useState(true);
   const [captionsOn, setCaptionsOn] = useState(false);
-  const [landscape, setLandscape] = useState(false);
-  const isPortrait = useIsPortrait();
+  const isPortrait = useMediaQuery("(orientation: portrait)", true);
+  const isTouch = useMediaQuery("(pointer: coarse)", true);
+  // The rotate button turns sideways mode on for the orientation the screen is in
+  // when it's pressed (stored here). Physically turning the phone resets it.
+  const [sidewaysFor, setSidewaysFor] = useState<"portrait" | "landscape" | null>(null);
+  const orientation = isPortrait ? "portrait" : "landscape";
+  const [lastOrientation, setLastOrientation] = useState(orientation);
+  if (lastOrientation !== orientation) {
+    setLastOrientation(orientation);
+    setSidewaysFor(null);
+  }
+  const sidewaysToggled = sidewaysFor === orientation;
+  // A phone physically held sideways always gets the landscape layout.
+  const physicalLandscape = !isPortrait && isTouch;
+  const landscape = sidewaysToggled || physicalLandscape;
   // Sideways mode on a portrait screen: turn the whole feed 90° so it fills the
   // phone held sideways, while vertical swiping between videos keeps working.
-  const rotated = landscape && isPortrait;
+  const rotated = sidewaysToggled && isPortrait;
   const activeIndexRef = useRef(activeIndex);
   useEffect(() => {
     activeIndexRef.current = activeIndex;
@@ -70,6 +78,29 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
     const scroller = scrollerRef.current;
     if (scroller) scroller.scrollTop = activeIndexRef.current * scroller.clientHeight;
   }, [landscape, rotated]);
+
+  // Rotating the phone or resizing the window changes the slide height, which
+  // would leave the scroller between two videos: snap back to the current one.
+  useEffect(() => {
+    let frame = 0;
+    const resnap = () => {
+      const index = activeIndexRef.current;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const scroller = scrollerRef.current;
+        if (scroller) scroller.scrollTop = index * scroller.clientHeight;
+      });
+    };
+    window.addEventListener("resize", resnap);
+    window.addEventListener("orientationchange", resnap);
+    window.visualViewport?.addEventListener("resize", resnap);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", resnap);
+      window.removeEventListener("orientationchange", resnap);
+      window.visualViewport?.removeEventListener("resize", resnap);
+    };
+  }, []);
   const [toast, setToast] = useState<string | null>(null);
   const inFlight = useRef(false);
 
@@ -129,7 +160,10 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
 
   const toggleMute = useCallback(() => setMuted((value) => !value), []);
   const toggleCaptions = useCallback(() => setCaptionsOn((value) => !value), []);
-  const toggleLandscape = useCallback(() => setLandscape((value) => !value), []);
+  const toggleLandscape = useCallback(
+    () => setSidewaysFor((value) => (value === orientation ? null : orientation)),
+    [orientation],
+  );
   const autoplayBlocked = useCallback(() => setMuted(true), []);
   const notify = useCallback((message: string) => setToast(message), []);
 
@@ -163,7 +197,7 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
                 captionsOn={captionsOn}
                 landscape={landscape}
                 onToggleMute={toggleMute}
-                onToggleLandscape={toggleLandscape}
+                onToggleLandscape={physicalLandscape ? undefined : toggleLandscape}
                 onToggleCaptions={toggleCaptions}
                 onAutoplayBlocked={autoplayBlocked}
                 onNotify={notify}
@@ -181,6 +215,7 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
       landscape,
       toggleMute,
       toggleLandscape,
+      physicalLandscape,
       toggleCaptions,
       autoplayBlocked,
       notify,
@@ -190,12 +225,15 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
   return (
     <main
       className={
-        rotated
-          ? "rotated-shell bg-black"
-          : landscape
-            ? "relative h-dvh w-full bg-black"
-            : "relative mx-auto h-dvh w-full max-w-[calc(100dvh*9/16)] bg-black sm:border-x sm:border-white/10"
+          `no-callout touch-manipulation select-none ${
+            rotated
+              ? "rotated-shell bg-black"
+              : landscape
+                ? "safe-x relative h-dvh w-full bg-black"
+                : "relative mx-auto h-dvh w-full max-w-[calc(100dvh*9/16)] bg-black sm:border-x sm:border-white/10"
+          }`
       }
+      onContextMenu={(event) => event.preventDefault()}
       style={{ "--feed-h": rotated ? "100vw" : "100dvh" } as React.CSSProperties}
     >
       <header className="safe-top pointer-events-none absolute inset-x-0 top-0 z-40 bg-gradient-to-b from-black/70 to-transparent">

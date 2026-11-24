@@ -17,7 +17,8 @@ type Props = {
   /** Sideways mode: the video is centered and as large as the frame allows. */
   landscape: boolean;
   onToggleMute: () => void;
-  onToggleLandscape: () => void;
+  /** Absent when the phone is physically sideways: no rotate button then. */
+  onToggleLandscape?: () => void;
   /** Called when the browser refuses to autoplay with sound. */
   onAutoplayBlocked: () => void;
 };
@@ -347,6 +348,7 @@ export function VideoStage({
       {active && !failed && (
         <div className={`pointer-events-none absolute inset-x-0 ${frameTop} z-20 -translate-y-1/2`}>
           <div className="relative mx-auto aspect-video" style={frameStyle}>
+            {onToggleLandscape && (
             <button
               type="button"
               onClick={onToggleLandscape}
@@ -358,9 +360,12 @@ export function VideoStage({
             >
               <RotateIcon size={18} />
             </button>
+            )}
             <div
               className={`pointer-events-auto absolute flex items-center gap-1.5 ${
-                landscape ? "top-2 right-12 flex-row" : "right-2 bottom-2 flex-col"
+                landscape
+                  ? `top-2 flex-row ${onToggleLandscape ? "right-12" : "right-2"}`
+                  : "right-2 bottom-2 flex-col"
               }`}
             >
               <button

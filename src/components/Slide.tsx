@@ -14,7 +14,8 @@ type Props = {
   captionsOn: boolean;
   landscape: boolean;
   onToggleMute: () => void;
-  onToggleLandscape: () => void;
+  /** Absent when the phone is physically sideways (the layout already is). */
+  onToggleLandscape?: () => void;
   onToggleCaptions: () => void;
   onAutoplayBlocked: () => void;
   onNotify: (message: string) => void;
@@ -66,7 +67,7 @@ export const Slide = memo(function Slide({
         <div className={`min-w-0 flex-1 ${landscape ? "max-w-[60%]" : ""}`}>
           <Overlay item={item} compact={landscape} />
         </div>
-        <div className="shrink-0 pb-1">
+        <div className="ml-auto shrink-0 pb-1">
           <ActionBar
             item={item}
             compact={landscape}
