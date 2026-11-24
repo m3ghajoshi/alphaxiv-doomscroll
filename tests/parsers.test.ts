@@ -1,33 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { decodeEntities, parseAttributes } from "@/lib/alphaxiv/html";
 import { paperIdFromUrl } from "@/lib/alphaxiv/ids";
-import { parseHotPage } from "@/lib/alphaxiv/hot-page";
 import { extractExplainer, parsePaperPage } from "@/lib/alphaxiv/paper-page";
 import { formatCount, toPlainText } from "@/lib/format";
 import { fixture } from "./load-fixture";
 
 const BASE = "https://www.alphaxiv.org";
-
-describe("parseHotPage", () => {
-  it("reads the Trending Papers ItemList in order", () => {
-    const candidates = parseHotPage(fixture("hot-page.html"));
-    expect(candidates.map((c) => c.id)).toEqual([
-      "2611.harness-cg",
-      "2611.glm-5",
-      "2611.24778",
-      "2611.claimed-riemann-hypothesis-proof",
-    ]);
-    expect(candidates[2]).toMatchObject({
-      rank: 3,
-      url: "https://www.alphaxiv.org/abs/2611.24778",
-      listing: { views: 7696, likes: 414, authors: ["Randall Balestriero", "Yann LeCun", "Kerda Varaku"] },
-    });
-  });
-
-  it("returns an empty list when there is no JSON-LD", () => {
-    expect(parseHotPage("<html><body>nothing</body></html>")).toEqual([]);
-  });
-});
 
 describe("parsePaperPage", () => {
   it("extracts metadata, profile links and the video explainer", () => {

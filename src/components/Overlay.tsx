@@ -18,7 +18,9 @@ export function Overlay({ item }: { item: FeedItem }) {
     <div className="pointer-events-auto flex flex-col gap-2 pr-2">
       <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium">
         <span className="rounded-full bg-white/15 px-2 py-0.5 backdrop-blur">
-          #{item.hotRank} on Hot
+          {item.collection.sort === "Hot"
+            ? `#${item.rank} on Hot`
+            : `#${item.rank} · ${item.collection.label}`}
         </span>
         <span className="inline-flex items-center gap-1 rounded-full bg-accent/90 px-2 py-0.5 text-white">
           <SparkIcon size={11} />

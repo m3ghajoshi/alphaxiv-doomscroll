@@ -2,134 +2,170 @@ import "server-only";
 import { getConfig, type AppConfig } from "../config";
 import { toPlainText } from "../format";
 import { TtlCache } from "./cache";
-import { parseHotPage } from "./hot-page";
-import { fetchText, mapWithConcurrency, UpstreamError } from "./http";
+import { buildFeedUrl, feedPaperToItem, parseFeedResponse } from "./feed-api";
+import { fetchJson, fetchText, mapWithConcurrency, UpstreamError } from "./http";
 import { fetchHotFeedViaMcp } from "./mcp";
-import { parsePaperPage, type PaperPage } from "./paper-page";
-import type { FeedItem, FeedPage, HotCandidate } from "./types";
+import { parsePaperPage } from "./paper-page";
+import type { Collection, FeedItem, FeedPage, HotCandidate } from "./types";
 
-type HotList = { candidates: HotCandidate[]; source: FeedPage["source"] };
+type Catalog = { items: FeedItem[]; scanned: number; source: FeedPage["source"] };
 
-const SCAN_CONCURRENCY = 6;
+const PAPER_PAGE_CONCURRENCY = 6;
 
-let candidateCache: TtlCache<HotList> | undefined;
-let paperCache: TtlCache<PaperPage | null> | undefined;
+let catalogCache: TtlCache<Catalog> | undefined;
 
-function caches(config: AppConfig) {
-  candidateCache ??= new TtlCache<HotList>(config.cacheTtlMs, 4);
-  paperCache ??= new TtlCache<PaperPage | null>(config.cacheTtlMs, 1000);
-  return { candidateCache, paperCache };
-}
+const FEED_PAGE_CONCURRENCY = 4;
 
-async function loadFromHotPage(config: AppConfig): Promise<HotList> {
-  const html = await fetchText(`${config.baseUrl}/?sort=Hot`, {
-    revalidateSeconds: config.cacheTtlMs / 1000,
+/**
+ * Reads each configured list (e.g. Hot, then Likes) from the public feed API.
+ * Explainers are spread thinly through the lists (on 2026-11-24: 14 in the top
+ * 121 Hot papers, 5 in the top 550 by likes), so several pages of each list are
+ * fetched in parallel. Papers already seen in an earlier list are skipped, so
+ * Hot papers keep their Hot rank. A failed page is logged and skipped.
+ */
+async function loadFromFeedApi(config: AppConfig): Promise<Catalog> {
+  const requests = config.lists.flatMap((collection) =>
+    Array.from({ length: config.maxPages }, (_, pageNum) => ({ collection, pageNum })),
+  );
+  let lastError: unknown;
+  const pages = await mapWithConcurrency(requests, FEED_PAGE_CONCURRENCY, async (request) => {
+    const url = buildFeedUrl(config.apiUrl, request.collection, request.pageNum, config.pageSize);
+    try {
+      const papers = parseFeedResponse(
+        await fetchJson(url, { revalidateSeconds: config.cacheTtlMs / 1000 }),
+      );
+      if (papers === null) {
+        throw new UpstreamError(
+          "The alphaXiv feed response had no paper list (its format may have changed)",
+          null,
+          url,
+        );
+      }
+      return papers;
+    } catch (error) {
+      lastError = error;
+      console.warn(
+        `[feed] ${request.collection.sort}/${request.collection.interval} page ${request.pageNum} failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return null;
+    }
   });
-  if (!html) throw new UpstreamError("alphaXiv Hot page not found", 404, config.baseUrl);
-  const candidates = parseHotPage(html).slice(0, config.hotFeedLimit);
-  if (candidates.length === 0) {
-    throw new UpstreamError(
-      "Could not find the trending list on the alphaXiv Hot page (its markup may have changed)",
-      null,
-      config.baseUrl,
-    );
-  }
-  return { candidates, source: "hot-page" };
-}
 
-async function loadHotList(config: AppConfig): Promise<HotList> {
-  const useMcp = config.feedSource === "mcp" || (config.feedSource === "auto" && config.apiKey);
-  if (!useMcp) return loadFromHotPage(config);
-  if (!config.apiKey) {
-    throw new Error("FEED_SOURCE=mcp requires ALPHAXIV_API_KEY to be set");
+  if (pages.every((page) => page === null)) {
+    throw lastError instanceof Error
+      ? lastError
+      : new UpstreamError("Could not load the alphaXiv feed", null, config.apiUrl);
   }
-  try {
-    const candidates = await fetchHotFeedViaMcp({
-      mcpUrl: config.mcpUrl,
-      apiKey: config.apiKey,
-      limit: config.hotFeedLimit,
-      baseUrl: config.baseUrl,
-    });
-    return { candidates, source: "mcp" };
-  } catch (error) {
-    if (config.feedSource === "mcp") throw error;
-    console.warn(
-      `[feed] MCP get_hot_feed failed, falling back to the Hot page: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-    return loadFromHotPage(config);
-  }
-}
 
-async function loadPaper(config: AppConfig, candidate: HotCandidate): Promise<PaperPage | null> {
-  try {
-    // Always read through the configured base URL rather than a URL taken from upstream markup.
-    const url = `${config.baseUrl}/abs/${encodeURIComponent(candidate.id)}`;
-    const html = await fetchText(url, { revalidateSeconds: config.cacheTtlMs / 1000 });
-    return html ? parsePaperPage(html, config.baseUrl) : null;
-  } catch (error) {
-    // One unreachable paper should not break the feed; skip it this round.
-    console.warn(
-      `[feed] Skipping ${candidate.id}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    throw error;
-  }
-}
-
-/** Merges the Hot listing and paper page into a feed item, or null if it has no explainer. */
-export function toFeedItem(candidate: HotCandidate, paper: PaperPage | null): FeedItem | null {
-  if (!paper?.explainer) return null;
-  const listing = candidate.listing;
-  const paperUrl = paper.canonicalUrl || candidate.url;
-  return {
-    id: candidate.id,
-    title: toPlainText(paper.title || listing?.title || candidate.id),
-    summary: toPlainText(paper.abstract || listing?.summary || ""),
-    authors:
-      paper.authors.length > 0
-        ? paper.authors
-        : (listing?.authors ?? []).map((name) => ({ name, profileUrl: null, affiliation: null })),
-    views: paper.views ?? listing?.views ?? null,
-    likes: paper.likes ?? listing?.likes ?? null,
-    comments: paper.comments,
-    publishedAt: paper.publishedAt ?? listing?.publishedAt ?? null,
-    paperUrl,
-    discussionUrl: `${paperUrl.split("#")[0]}#discussion`,
-    hotRank: candidate.rank,
-    explainer: paper.explainer,
-  };
+  const items: FeedItem[] = [];
+  const seen = new Set<string>();
+  const ranks = new Map<Collection, number>();
+  let scanned = 0;
+  requests.forEach(({ collection }, index) => {
+    for (const paper of pages[index] ?? []) {
+      const rank = (ranks.get(collection) ?? 0) + 1;
+      ranks.set(collection, rank);
+      if (seen.has(paper.universal_paper_id)) continue;
+      seen.add(paper.universal_paper_id);
+      scanned += 1;
+      const item = feedPaperToItem(paper, collection, rank, config.baseUrl);
+      if (item) items.push(item);
+    }
+  });
+  return { items, scanned, source: "feed-api" };
 }
 
 /**
- * Returns one page of the feed: Hot papers, in Hot order, that have an alphaXiv
- * video explainer. `cursor` is an index into the Hot list; papers without an
- * explainer are skipped, so a page may scan more papers than it returns.
+ * Documented fallback: Hot paper IDs from the MCP `get_hot_feed` tool, then
+ * each paper's /abs page for its explainer and metadata. Needs an API key.
+ */
+async function loadFromMcp(config: AppConfig): Promise<Catalog> {
+  if (!config.apiKey) throw new Error("The MCP source needs ALPHAXIV_API_KEY to be set");
+  const candidates = await fetchHotFeedViaMcp({
+    mcpUrl: config.mcpUrl,
+    apiKey: config.apiKey,
+    limit: config.hotFeedLimit,
+    baseUrl: config.baseUrl,
+  });
+  const hot: Collection = { sort: "Hot", interval: "30 Days", label: "Hot" };
+  const items = await mapWithConcurrency(candidates, PAPER_PAGE_CONCURRENCY, (candidate) =>
+    loadPaperItem(config, candidate, hot),
+  );
+  return {
+    items: items.filter((item): item is FeedItem => item !== null),
+    scanned: candidates.length,
+    source: "mcp",
+  };
+}
+
+async function loadPaperItem(
+  config: AppConfig,
+  candidate: HotCandidate,
+  collection: Collection,
+): Promise<FeedItem | null> {
+  try {
+    const html = await fetchText(`${config.baseUrl}/abs/${encodeURIComponent(candidate.id)}`, {
+      revalidateSeconds: config.cacheTtlMs / 1000,
+    });
+    const paper = html ? parsePaperPage(html, config.baseUrl) : null;
+    if (!paper?.explainer) return null;
+    const paperUrl = paper.canonicalUrl || candidate.url;
+    return {
+      id: candidate.id,
+      title: toPlainText(paper.title),
+      summary: toPlainText(paper.abstract),
+      authors: paper.authors,
+      views: paper.views,
+      likes: paper.likes,
+      comments: paper.comments,
+      publishedAt: paper.publishedAt,
+      paperUrl,
+      discussionUrl: `${paperUrl.split("#")[0]}#discussion`,
+      collection,
+      rank: candidate.rank,
+      explainer: paper.explainer,
+    };
+  } catch (error) {
+    console.warn(
+      `[feed] Skipping ${candidate.id}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return null;
+  }
+}
+
+async function loadCatalog(config: AppConfig): Promise<Catalog> {
+  if (config.feedSource === "mcp") return loadFromMcp(config);
+  if (config.feedSource === "feed-api" || !config.apiKey) return loadFromFeedApi(config);
+  try {
+    return await loadFromFeedApi(config);
+  } catch (error) {
+    console.warn(
+      `[feed] Feed API failed, falling back to MCP: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return loadFromMcp(config);
+  }
+}
+
+/**
+ * Returns one page of the feed. The full list of explainers is small (tens of
+ * videos), so it is built once per cache period and paged in memory; `cursor`
+ * is an index into it.
  */
 export async function getFeedPage(cursor = 0, limit = 5): Promise<FeedPage> {
   const config = getConfig();
-  const { candidateCache, paperCache } = caches(config);
-  const { candidates, source } = await candidateCache.get("hot", () => loadHotList(config));
-
-  const items: FeedItem[] = [];
-  let position = Math.max(0, cursor);
-  while (items.length < limit && position < candidates.length) {
-    const batch = candidates.slice(position, position + SCAN_CONCURRENCY);
-    const papers = await mapWithConcurrency(batch, SCAN_CONCURRENCY, (candidate) =>
-      paperCache.get(candidate.id, () => loadPaper(config, candidate)).catch(() => null),
-    );
-    for (let index = 0; index < batch.length; index += 1) {
-      position += 1;
-      const item = toFeedItem(batch[index] as HotCandidate, papers[index] ?? null);
-      if (item) items.push(item);
-      if (items.length >= limit) break;
-    }
-  }
-
+  catalogCache ??= new TtlCache<Catalog>(config.cacheTtlMs, 2);
+  const catalog = await catalogCache.get("catalog", () => loadCatalog(config));
+  const start = Math.max(0, cursor);
+  const end = start + limit;
   return {
-    items,
-    nextCursor: position < candidates.length ? position : null,
-    scanned: candidates.length,
-    source,
+    items: catalog.items.slice(start, end),
+    nextCursor: end < catalog.items.length ? end : null,
+    scanned: catalog.scanned,
+    total: catalog.items.length,
+    source: catalog.source,
   };
 }

@@ -1,0 +1,138 @@
+{
+ "papers": [
+  {
+   "id": "0198-2611.harness-cg",
+   "paper_group_id": "g-2611.harness-cg",
+   "universal_paper_id": "2611.harness-cg",
+   "title": "Language Model Harnesses Can Be Compositional Generalizers",
+   "abstract": "Abstract of Language Model Harnesses Can Be Compositional Generalizers with an $O(h^2)$ bound.",
+   "feed_description": null,
+   "paper_summary": null,
+   "video_explainer": null,
+   "authors": [
+    "Alex L. Zhang"
+   ],
+   "full_authors_v2": [
+    {
+     "full_name": "Alex L. Zhang",
+     "researcher": {
+      "slug": "alex-l-zhang",
+      "name": "Alex L. Zhang",
+      "affiliation": "MIT CSAIL"
+     }
+    }
+   ],
+   "metrics": {
+    "visits_count": {
+     "all": 9248,
+     "last_7_days": 4624
+    },
+    "total_votes": 446,
+    "public_total_votes": 445
+   },
+   "first_publication_date": "2026-11-18T17:24:00.000Z",
+   "publication_date": "2026-11-18T17:24:00.000Z",
+   "topics": [
+    "cs.LG"
+   ]
+  },
+  {
+   "id": "0198-2611.24778",
+   "paper_group_id": "g-2611.24778",
+   "universal_paper_id": "2611.24778",
+   "title": "Counterfactual World Models: JEPAs That Reason About \"What If\"",
+   "abstract": "Abstract of Counterfactual World Models: JEPAs That Reason About \"What If\" with an $O(h^2)$ bound.",
+   "feed_description": null,
+   "paper_summary": {
+    "summary": "Summary of Counterfactual World Models: JEPAs That Reason About \"What If\".",
+    "feedDescription": "Short."
+   },
+   "video_explainer": {
+    "videoUrl": "https://explainers.assets.alphaxiv.org/57d63d7eeaf715a27195b3d7c681c025bda4aa5fb41f9ae93017dda935a0d9d7.mp4",
+    "videoThumbnailUrl": "https://explainers.assets.alphaxiv.org/57d63d7eeaf715a27195b3d7c681c025bda4aa5fb41f9ae93017dda935a0d9d7.jpg",
+    "videoCaptionUrl": "https://explainers.assets.alphaxiv.org/57d63d7eeaf715a27195b3d7c681c025bda4aa5fb41f9ae93017dda935a0d9d7.vtt",
+    "durationSeconds": 184
+   },
+   "authors": [
+    "Randall Balestriero",
+    "Yann LeCun",
+    "Kerda Varaku"
+   ],
+   "full_authors_v2": [
+    {
+     "full_name": "Randall Balestriero",
+     "researcher": {
+      "slug": "randall-balestriero",
+      "name": "Randall Balestriero",
+      "affiliation": "Brown University"
+     }
+    },
+    {
+     "full_name": "Yann LeCun",
+     "researcher": {
+      "slug": "yann-lecun",
+      "name": "Yann LeCun",
+      "affiliation": "NYU"
+     }
+    },
+    {
+     "full_name": "Kerda Varaku",
+     "researcher": null
+    }
+   ],
+   "metrics": {
+    "visits_count": {
+     "all": 7696,
+     "last_7_days": 3848
+    },
+    "total_votes": 415,
+    "public_total_votes": 414
+   },
+   "first_publication_date": "2026-11-18T17:24:00.000Z",
+   "publication_date": "2026-11-18T17:24:00.000Z",
+   "topics": [
+    "cs.LG"
+   ]
+  },
+  {
+   "id": "0198-2611.glm-5",
+   "paper_group_id": "g-2611.glm-5",
+   "universal_paper_id": "2611.glm-5",
+   "title": "GLM-5.4: Toward Generalized Coding with Our First Loop Transformer",
+   "abstract": "Abstract of GLM-5.4: Toward Generalized Coding with Our First Loop Transformer with an $O(h^2)$ bound.",
+   "feed_description": null,
+   "paper_summary": {
+    "summary": "Summary of GLM-5.4: Toward Generalized Coding with Our First Loop Transformer.",
+    "feedDescription": "Short."
+   },
+   "video_explainer": {
+    "videoUrl": "https://explainers.assets.alphaxiv.org/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.mp4",
+    "videoThumbnailUrl": "https://explainers.assets.alphaxiv.org/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+    "videoCaptionUrl": "https://explainers.assets.alphaxiv.org/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.vtt",
+    "durationSeconds": 184
+   },
+   "authors": [
+    "Z.ai"
+   ],
+   "full_authors_v2": [
+    {
+     "full_name": "Z.ai",
+     "researcher": null
+    }
+   ],
+   "metrics": {
+    "visits_count": {
+     "all": 6820,
+     "last_7_days": 3410
+    },
+    "total_votes": 83,
+    "public_total_votes": 82
+   },
+   "first_publication_date": "2026-11-18T17:24:00.000Z",
+   "publication_date": "2026-11-18T17:24:00.000Z",
+   "topics": [
+    "cs.LG"
+   ]
+  }
+ ]
+}

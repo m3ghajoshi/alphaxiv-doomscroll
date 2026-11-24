@@ -147,9 +147,6 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
           <h1 className="text-[15px] font-extrabold tracking-tight">
             alpha<span className="text-accent">X</span>iv <span className="font-medium text-white/70">Scroll</span>
           </h1>
-          <span className="rounded-full border border-white/25 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide uppercase">
-            Hot
-          </span>
         </div>
         {muted && items.length > 0 && (
           <button
@@ -170,7 +167,7 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
           <div className="feed-slide grid place-items-center">
             <div className="flex flex-col items-center gap-3 text-sm text-white/70">
               <span className="size-9 animate-spin rounded-full border-2 border-white/25 border-t-white" />
-              Finding explainers in the Hot feed…
+              Finding video explainers…
             </div>
           </div>
         )}
@@ -196,7 +193,7 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
             <div className="flex max-w-sm flex-col gap-2">
               <p className="text-base font-semibold">No video explainers right now</p>
               <p className="text-sm text-white/65">
-                None of the papers currently trending on alphaXiv have a video explainer yet.
+                None of the papers on alphaXiv&apos;s lists have a video explainer right now.
                 Check back soon.
               </p>
             </div>
@@ -208,7 +205,7 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
             <div className="flex max-w-sm flex-col items-center gap-3">
               <p className="text-lg font-bold">You&apos;re all caught up</p>
               <p className="text-sm text-white/65">
-                That&apos;s every video explainer in today&apos;s alphaXiv Hot feed.
+                ThatThat&apos;s every video explainer on alphaXiv&apos;s Hot and Most liked lists right now.apos;s every alphaXiv video explainer we could find right now.
               </p>
               <div className="flex gap-2">
                 <button

@@ -23,32 +23,34 @@ export type FeedItem = {
   publishedAt: string | null;
   paperUrl: string;
   discussionUrl: string;
-  /** 1-based rank in the Hot feed. */
-  hotRank: number;
+  /** Which alphaXiv list the paper came from, and its 1-based position there. */
+  collection: Collection;
+  rank: number;
   explainer: VideoExplainer;
+};
+
+/** An alphaXiv feed list: a sort plus a time interval, e.g. Hot over 30 days. */
+export type Collection = {
+  sort: string;
+  interval: string;
+  /** Short label for the UI, e.g. "Hot" or "Most liked". */
+  label: string;
 };
 
 export type FeedPage = {
   items: FeedItem[];
   /** Pass back as ?cursor= to load the next page; null when the feed is exhausted. */
   nextCursor: number | null;
-  /** Total Hot papers being scanned. */
+  /** Total papers scanned across all lists. */
   scanned: number;
-  source: "mcp" | "hot-page";
+  /** Total explainers found. */
+  total: number;
+  source: "feed-api" | "mcp";
 };
 
-/** A paper from the Hot feed, before its paper page has been read. */
+/** A paper ID from the MCP Hot feed, before its paper page has been read. */
 export type HotCandidate = {
   id: string;
   rank: number;
   url: string;
-  /** Data from the Hot page listing, when that was the source. */
-  listing?: {
-    title: string;
-    summary: string;
-    authors: string[];
-    views: number | null;
-    likes: number | null;
-    publishedAt: string | null;
-  };
 };

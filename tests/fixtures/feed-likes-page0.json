@@ -1,0 +1,84 @@
+{
+ "papers": [
+  {
+   "id": "0198-2611.24778",
+   "paper_group_id": "g-2611.24778",
+   "universal_paper_id": "2611.24778",
+   "title": "Counterfactual World Models: JEPAs That Reason About \"What If\"",
+   "abstract": "Abstract of Counterfactual World Models: JEPAs That Reason About \"What If\" with an $O(h^2)$ bound.",
+   "feed_description": null,
+   "paper_summary": {
+    "summary": "Summary of Counterfactual World Models: JEPAs That Reason About \"What If\".",
+    "feedDescription": "Short."
+   },
+   "video_explainer": {
+    "videoUrl": "https://explainers.assets.alphaxiv.org/57d63d7eeaf715a27195b3d7c681c025bda4aa5fb41f9ae93017dda935a0d9d7.mp4",
+    "videoThumbnailUrl": "https://explainers.assets.alphaxiv.org/57d63d7eeaf715a27195b3d7c681c025bda4aa5fb41f9ae93017dda935a0d9d7.jpg",
+    "videoCaptionUrl": "https://explainers.assets.alphaxiv.org/57d63d7eeaf715a27195b3d7c681c025bda4aa5fb41f9ae93017dda935a0d9d7.vtt",
+    "durationSeconds": 184
+   },
+   "authors": [],
+   "full_authors_v2": [],
+   "metrics": {
+    "visits_count": {
+     "all": 7696,
+     "last_7_days": 3848
+    },
+    "total_votes": 415,
+    "public_total_votes": 414
+   },
+   "first_publication_date": "2026-11-18T17:24:00.000Z",
+   "publication_date": "2026-11-18T17:24:00.000Z",
+   "topics": [
+    "cs.LG"
+   ]
+  },
+  {
+   "id": "0198-2611.23001",
+   "paper_group_id": "g-2611.23001",
+   "universal_paper_id": "2611.23001",
+   "title": "An Older Classic With A Video",
+   "abstract": "Abstract of An Older Classic With A Video with an $O(h^2)$ bound.",
+   "feed_description": null,
+   "paper_summary": {
+    "summary": "Summary of An Older Classic With A Video.",
+    "feedDescription": "Short."
+   },
+   "video_explainer": {
+    "videoUrl": "https://explainers.assets.alphaxiv.org/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.mp4",
+    "videoThumbnailUrl": "https://explainers.assets.alphaxiv.org/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+    "videoCaptionUrl": "https://explainers.assets.alphaxiv.org/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.vtt",
+    "durationSeconds": 184
+   },
+   "authors": [
+    "Some One"
+   ],
+   "full_authors_v2": [
+    {
+     "full_name": "Some One",
+     "researcher": {
+      "slug": "some-one",
+      "name": "Some One",
+      "affiliation": "Lab"
+     }
+    }
+   ],
+   "metrics": {
+    "visits_count": {
+     "all": 50000,
+     "last_7_days": 25000
+    },
+    "total_votes": 901,
+    "public_total_votes": 900
+   },
+   "first_publication_date": "2026-11-18T17:24:00.000Z",
+   "publication_date": "2026-11-18T17:24:00.000Z",
+   "topics": [
+    "cs.LG"
+   ]
+  },
+  {
+   "universal_paper_id": "broken-entry"
+  }
+ ]
+}

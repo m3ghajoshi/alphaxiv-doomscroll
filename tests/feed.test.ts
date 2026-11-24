@@ -1,30 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fixture } from "./load-fixture";
 
-const pages: Record<string, string | number> = {
-  "https://www.alphaxiv.org/?sort=Hot": fixture("hot-page.html"),
-  "https://www.alphaxiv.org/abs/2611.harness-cg": fixture("paper-without-video.html"),
-  "https://www.alphaxiv.org/abs/2611.glm-5": 503,
-  "https://www.alphaxiv.org/abs/2611.24778": fixture("paper-with-video.html"),
-  "https://www.alphaxiv.org/abs/2611.claimed-riemann-hypothesis-proof": 404,
-};
+const API = "https://api.alphaxiv.org/papers/v3/feed";
 
-describe("getFeedPage", () => {
+function respond(url: URL): Response {
+  const sort = url.searchParams.get("sort");
+  const page = url.searchParams.get("pageNum");
+  if (sort === "Hot" && page === "0") return new Response(fixture("feed-hot-page0.json"));
+  if (sort === "Likes" && page === "0") return new Response(fixture("feed-likes-page0.json"));
+  return new Response(JSON.stringify({ papers: [] }));
+}
+
+describe("getFeedPage (feed API)", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.stubEnv("ALPHAXIV_API_KEY", "");
-    vi.stubEnv("FEED_SOURCE", "hot-page");
-    vi.stubEnv("CACHE_TTL_SECONDS", "0");
+    vi.stubEnv("FEED_SOURCE", "auto");
+    vi.stubEnv("FEED_LISTS", "Hot:30 Days,Likes:All time");
+    vi.stubEnv("FEED_PAGE_SIZE", "50");
+    vi.stubEnv("FEED_MAX_PAGES", "2");
+    vi.stubEnv("CACHE_TTL_SECONDS", "60");
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: string | URL) => {
-        const body = pages[String(input)];
-        if (body === undefined) throw new Error(`unexpected fetch ${String(input)}`);
-        if (typeof body === "number") return new Response("error", { status: body });
-        return new Response(body, { status: 200 });
-      }),
-    );
   });
 
   afterEach(() => {
@@ -33,31 +29,50 @@ describe("getFeedPage", () => {
     vi.restoreAllMocks();
   });
 
-  it("keeps only Hot papers with a video explainer and skips failing papers", async () => {
-    const { getFeedPage } = await import("@/lib/alphaxiv/feed");
-    const page = await getFeedPage(0, 5);
-    expect(page.source).toBe("hot-page");
-    expect(page.scanned).toBe(4);
-    expect(page.nextCursor).toBeNull();
-    expect(page.items).toHaveLength(1);
-    expect(page.items[0]).toMatchObject({
-      id: "2611.24778",
-      hotRank: 3,
-      likes: 414,
-      views: 7696,
-      paperUrl: "https://www.alphaxiv.org/abs/2611.24778",
-      discussionUrl: "https://www.alphaxiv.org/abs/2611.24778#discussion",
+  it("merges Hot then Likes, keeps only explainers, and de-duplicates", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const url = new URL(String(input));
+      expect(`${url.origin}${url.pathname}`).toBe(API);
+      return respond(url);
     });
-    expect(page.items[0]?.summary).toContain("O(h^2) bound");
+    vi.stubGlobal("fetch", fetchMock);
+    const { getFeedPage } = await import("@/lib/alphaxiv/feed");
+
+    const page = await getFeedPage(0, 2);
+    expect(page.source).toBe("feed-api");
+    expect(page.total).toBe(3);
+    expect(page.items.map((item) => [item.id, item.collection.sort, item.rank])).toEqual([
+      ["2611.24778", "Hot", 2],
+      ["2611.glm-5", "Hot", 3],
+    ]);
+    expect(page.nextCursor).toBe(2);
+
+    const rest = await getFeedPage(2, 2);
+    expect(rest.items.map((item) => [item.id, item.collection.label, item.rank])).toEqual([
+      ["2611.23001", "Most liked", 2],
+    ]);
+    expect(rest.nextCursor).toBeNull();
+    // Two pages per list, fetched once and then served from the cache.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
-  it("returns a cursor when it stops early", async () => {
+  it("keeps the feed when one list fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL) => {
+        const url = new URL(String(input));
+        if (url.searchParams.get("sort") === "Likes") return new Response("nope", { status: 400 });
+        return respond(url);
+      }),
+    );
     const { getFeedPage } = await import("@/lib/alphaxiv/feed");
-    const page = await getFeedPage(0, 1);
-    expect(page.items.map((item) => item.id)).toEqual(["2611.24778"]);
-    expect(page.nextCursor).toBe(3);
-    const rest = await getFeedPage(3, 1);
-    expect(rest.items).toEqual([]);
-    expect(rest.nextCursor).toBeNull();
+    const page = await getFeedPage(0, 10);
+    expect(page.items.map((item) => item.id)).toEqual(["2611.24778", "2611.glm-5"]);
+  });
+
+  it("errors clearly when the response format is unrecognised", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ message: "moved" }))));
+    const { getFeedPage } = await import("@/lib/alphaxiv/feed");
+    await expect(getFeedPage(0, 5)).rejects.toThrow(/no paper list/);
   });
 });

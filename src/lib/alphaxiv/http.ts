@@ -15,6 +15,7 @@ const USER_AGENT =
   "alphaxiv-doomscroll/0.1 (server-side feed reader)";
 
 type FetchTextOptions = {
+  accept?: string;
   timeoutMs?: number;
   retries?: number;
   revalidateSeconds?: number;
@@ -28,13 +29,18 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 export async function fetchText(
   url: string,
-  { timeoutMs = 10_000, retries = 2, revalidateSeconds = 600 }: FetchTextOptions = {},
+  {
+    accept = "text/html,application/xhtml+xml",
+    timeoutMs = 10_000,
+    retries = 2,
+    revalidateSeconds = 600,
+  }: FetchTextOptions = {},
 ): Promise<string | null> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
       const response = await fetch(url, {
-        headers: { "user-agent": USER_AGENT, accept: "text/html,application/xhtml+xml" },
+        headers: { "user-agent": USER_AGENT, accept },
         signal: AbortSignal.timeout(timeoutMs),
         next: { revalidate: revalidateSeconds },
       });
@@ -58,6 +64,20 @@ export async function fetchText(
     null,
     url,
   );
+}
+
+/** GETs a URL and parses it as JSON. 404 is returned as null. */
+export async function fetchJson(
+  url: string,
+  options: Omit<FetchTextOptions, "accept"> = {},
+): Promise<unknown | null> {
+  const text = await fetchText(url, { ...options, accept: "application/json" });
+  if (text === null) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new UpstreamError(`alphaXiv returned invalid JSON for ${url}`, null, url);
+  }
 }
 
 /** Runs async work over items with bounded concurrency, preserving order. */

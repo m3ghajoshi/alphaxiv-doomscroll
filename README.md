@@ -2,16 +2,19 @@
 
 > Repository: `alphaxiv-doomscroll`. App name in the UI: **alphaXiv Scroll**.
 
-A mobile-first, TikTok-style vertical feed of the **video explainers** for papers trending on
-[alphaXiv](https://www.alphaxiv.org/?sort=Hot). Swipe up for the next paper. Each video autoplays
+A mobile-first, TikTok-style vertical feed of the **video explainers** for papers on
+[alphaXiv](https://www.alphaxiv.org). Swipe up for the next paper. Each video autoplays
 muted, and you tap it to turn the sound on. Every slide links back to the paper, its authors and its
 discussion on alphaXiv.
 
-- **Hot feed only.** Papers come from alphaXiv's Hot ranking, in Hot order.
-- **Explainers only.** A trending paper with no alphaXiv video explainer is skipped.
+- **Hot first, then Most liked.** Papers come from alphaXiv's Hot list (30 days) in Hot order, then
+  from its all-time Most liked list. Both lists are configurable.
+- **Explainers only.** Papers without an alphaXiv video explainer are skipped. Explainers are rare
+  (on 2026-11-24, 14 of the top 121 Hot papers and 5 of the top 550 liked papers had one), so the
+  app scans several pages of each list.
 - **Horizontal videos in a vertical frame.** The 16:9 player sits in the middle of the frame. A
   blurred, zoomed copy of the same video fills the space behind it, so nothing gets cropped.
-- **TikTok-style overlay.** Hot rank, title, clickable author tags, an explainer badge and a two-line
+- **TikTok-style overlay.** Rank (e.g. "#3 on Hot"), title, clickable author tags, an explainer badge and a two-line
   summary you can expand. The right-hand rail has upvotes, discussion, share, captions and **Read**.
 - **Fast as the feed gets long.** Only the slides near the current one mount a `<video>`. The slide
   right after the current one preloads its metadata, and new pages are fetched before you reach the
@@ -25,40 +28,44 @@ discussion on alphaXiv.
 | ---------- | ------------------------------------------------------------------------ |
 | Framework  | Next.js 16 (App Router, React 19, TypeScript, strict mode)               |
 | Styling    | Tailwind CSS v4                                                          |
-| Data       | alphaXiv MCP (`get_hot_feed`) through `@modelcontextprotocol/sdk`, plus the JSON-LD alphaXiv renders into its pages |
+| Data       | alphaXiv's public feed API (`api.alphaxiv.org/papers/v3/feed`), with alphaXiv MCP (`get_hot_feed`) as a fallback |
 | Validation | zod, for environment variables and upstream payloads                     |
-| Tests      | Vitest, run against fixtures captured from real alphaXiv pages            |
+| Tests      | Vitest, run against fixtures modelled on real alphaXiv responses           |
 
 ## How the data works (and why it runs on the server)
 
-The alphaXiv MCP endpoint (`https://api.alphaxiv.org/mcp/v1`) does not accept cross-origin requests
-from browsers. The alphaXiv pages don't send CORS headers either. Because of that, **every request
-to alphaXiv goes through this app's server**, and the browser only ever calls `/api/feed`.
+alphaXiv's own website loads its home feed from a public JSON endpoint,
+`https://api.alphaxiv.org/papers/v3/feed`. Every paper in it includes a `video_explainer` field
+(`videoUrl`, `videoThumbnailUrl`, `videoCaptionUrl`, `durationSeconds`, or `null`), so one request
+returns a whole page of papers along with their explainers. That endpoint only allows CORS for
+`https://www.alphaxiv.org`, and the MCP endpoint refuses browsers entirely. Because of that,
+**every request to alphaXiv goes through this app's server**, and the browser only ever calls
+`/api/feed`.
 
 ```
-Browser ──► /api/feed?cursor=N ──► src/lib/alphaxiv/feed.ts
+Browser ──► /api/feed?cursor=N ──► src/lib/alphaxiv/feed.ts  (cached for CACHE_TTL_SECONDS)
                                      │
-                                     ├─ 1. Trending list (cached)
-                                     │     • MCP get_hot_feed  (when ALPHAXIV_API_KEY is set)
-                                     │     • else the Hot page's JSON-LD "Trending Papers" ItemList
+                                     ├─ For each list in FEED_LISTS (default Hot:30 Days, Likes:All time)
+                                     │     GET /papers/v3/feed?sort=…&interval=…&pageNum=0..N&pageSize=100
+                                     │     (pages fetched 4 at a time; a failed page is skipped)
                                      │
-                                     └─ 2. For each paper, /abs/<id> (cached, 6 at a time)
-                                           • JSON-LD ScholarlyArticle: title, abstract, authors
-                                             with /@slug profile URLs, view and upvote counts
-                                           • <video aria-label="Video explainer">: mp4, poster, captions
-                                           • no explainer → the paper is skipped
+                                     ├─ Keep papers whose video_explainer is set, de-duplicated across lists
+                                     │
+                                     └─ Fallback when the feed API fails and ALPHAXIV_API_KEY is set:
+                                           MCP get_hot_feed → each paper's /abs/<id> page
+                                           (JSON-LD metadata + <video aria-label="Video explainer">)
 ```
 
-- MCP `get_hot_feed` returns only paper IDs. None of the alphaXiv MCP tools return video data.
-  That's why the app reads each paper's page, where alphaXiv embeds the explainer player along with
-  structured schema.org metadata.
+- **The feed API is undocumented.** alphaXiv could change it without notice. The parser is lenient:
+  it ignores unknown fields, skips papers that don't fit, and fails loudly (with a test to show what
+  changed) only if the paper list itself disappears. The documented MCP route is the fallback.
+- **No `/?sort=` scraping.** alphaXiv's robots.txt disallows `/?` URLs, so the app never reads the
+  home page. `api.alphaxiv.org` has no robots.txt, and `/abs/<id>` pages are allowed.
 - The videos stream straight from `explainers.assets.alphaxiv.org` to the browser. This app never
   proxies them.
-- Responses are kept in an in-memory cache for `CACHE_TTL_SECONDS`, and also use Next's fetch
-  revalidation. If one paper fails to load, that paper is skipped and the rest of the feed still
-  loads.
-- Parsing relies on JSON-LD and ARIA labels, not CSS classes, because those change less often. If
-  alphaXiv changes its markup, the parser tests in `tests/` show exactly what broke.
+- Authors link to their alphaXiv profiles (`/@slug`) when alphaXiv has a researcher profile for them.
+  Upvotes come from `public_total_votes` and views from `visits_count.all`, the same numbers the site
+  shows. The feed has no comment count, so the comment button reads **Discuss**.
 
 **About model attribution:** alphaXiv doesn't publish which model generated an explainer. The badge
 on each slide therefore just says "alphaXiv Video Explainer" and makes no claim about the model.
@@ -87,10 +94,10 @@ on each slide therefore just says "alphaXiv Video Explainer" and makes no claim 
 │       ├── config.ts            # zod-validated environment variables
 │       ├── format.ts            # compact counts, LaTeX-to-plain-text
 │       └── alphaxiv/
-│           ├── feed.ts          # puts it together: trending list → papers → feed pages
+│           ├── feed.ts          # puts it together: lists → explainers → feed pages
+│           ├── feed-api.ts      # papers/v3/feed client and lenient parser
 │           ├── mcp.ts           # MCP client for get_hot_feed
-│           ├── hot-page.ts      # Hot page JSON-LD parser
-│           ├── paper-page.ts    # /abs/<id> parser (metadata and explainer)
+│           ├── paper-page.ts    # /abs/<id> parser (MCP fallback)
 │           ├── html.ts, schema.ts, ids.ts, http.ts, cache.ts, types.ts
 └── tests/                       # Vitest and fixtures captured from alphaxiv.org
 ```
@@ -127,25 +134,32 @@ Every variable is optional. See [`.env.example`](.env.example).
 
 | Variable            | Default                           | Purpose |
 | ------------------- | --------------------------------- | ------- |
-| `ALPHAXIV_API_KEY`  | none                              | alphaXiv MCP key. When set, the trending list comes from MCP `get_hot_feed`. **Server-only.** |
+| `FEED_LISTS`        | `Hot:30 Days,Likes:All time`      | Lists to read, in order. Sorts: Hot, Likes, Views, Comments, GitHub, Recent. Intervals: 3 Days, 7 Days, 30 Days, 90 Days, All time |
+| `FEED_PAGE_SIZE`    | `100`                             | Papers per feed request (5 to 100) |
+| `FEED_MAX_PAGES`    | `4`                               | Pages read per list (1 to 20) |
+| `FEED_SOURCE`       | `auto`                            | `auto` uses the feed API, falling back to MCP if a key is set. `feed-api` or `mcp` forces one source |
+| `ALPHAXIV_API_URL`  | `https://api.alphaxiv.org`        | Feed API base URL |
+| `ALPHAXIV_API_KEY`  | none                              | alphaXiv MCP key, only needed for the MCP fallback. **Server-only.** |
 | `ALPHAXIV_MCP_URL`  | `https://api.alphaxiv.org/mcp/v1` | MCP endpoint (streamable HTTP) |
-| `ALPHAXIV_BASE_URL` | `https://www.alphaxiv.org`        | Where the Hot page and paper pages are read from |
-| `FEED_SOURCE`       | `auto`                            | `auto` uses MCP if a key is set and falls back to the Hot page. `mcp` uses MCP only. `hot-page` uses the Hot page only |
-| `HOT_FEED_LIMIT`    | `60`                              | How many trending papers to scan for explainers (1 to 200) |
+| `ALPHAXIV_BASE_URL` | `https://www.alphaxiv.org`        | Where `/abs/<id>` pages are read from (MCP fallback) |
+| `HOT_FEED_LIMIT`    | `60`                              | Papers the MCP fallback scans (1 to 200) |
 | `CACHE_TTL_SECONDS` | `600`                             | How long server-side caches keep results |
 
-### MCP configuration
+### MCP configuration (optional fallback)
+
+The feed works without any key. Add one only if you want the documented MCP route as a fallback
+for when the feed API is unavailable.
 
 1. Sign in to alphaXiv and open **Settings → MCP/API**. Create an API key there.
 2. Put it in `.env.local` (or in your host's secret store):
    ```bash
    ALPHAXIV_API_KEY=axk_...
    ```
-3. Restart the server. When the trending list loads, `/api/feed` responses show `"source": "mcp"`.
+3. Restart the server. To force the MCP route, also set `FEED_SOURCE=mcp`; `/api/feed` then shows
+   `"source": "mcp"`.
 
 The app sends the key as `Authorization: Bearer <key>` over MCP streamable HTTP. The key never
-reaches the browser. If MCP fails and `FEED_SOURCE=auto`, the app logs a warning and falls back to
-the public Hot page.
+reaches the browser.
 
 If you'd like to look at the same server from Claude Code, use:
 
@@ -169,17 +183,20 @@ claude mcp add --transport http alphaxiv https://api.alphaxiv.org/mcp/v1 \
       "views": 7696, "likes": 414, "comments": null,
       "paperUrl": "https://www.alphaxiv.org/abs/2611.24778",
       "discussionUrl": "https://www.alphaxiv.org/abs/2611.24778#discussion",
-      "hotRank": 3,
+      "collection": { "sort": "Hot", "interval": "30 Days", "label": "Hot" },
+      "rank": 3,
       "explainer": { "src": "https://explainers.assets.alphaxiv.org/….mp4", "poster": "….jpg", "captions": "….vtt" }
     }
   ],
-  "nextCursor": 6,      // pass back to get the next page; null means you've reached the end
-  "scanned": 21,
-  "source": "hot-page"
+  "nextCursor": 5,      // pass back to get the next page; null means you've reached the end
+  "scanned": 780,       // unique papers scanned across all lists
+  "total": 19,          // explainers found
+  "source": "feed-api"
 }
 ```
 
-`comments` is `null` when alphaXiv doesn't render a count. In that case the UI shows **Discuss**.
+`comments` is `null` when alphaXiv doesn't provide a count, which is always the case for the feed
+API. In that case the UI shows **Discuss**.
 
 ## Controls
 
@@ -215,8 +232,8 @@ npm ci && npm run build
 PORT=3000 npm start
 ```
 
-The server's network needs outbound HTTPS access to `www.alphaxiv.org`, and to
-`api.alphaxiv.org` if you use MCP.
+The server's network needs outbound HTTPS access to `api.alphaxiv.org`, and to
+`www.alphaxiv.org` if you use the MCP fallback.
 
 ## Creating the GitHub repository
 
