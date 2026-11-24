@@ -162,8 +162,9 @@ export function VideoStage({
 
   useEffect(() => {
     const video = videoRef.current;
-    if (video) video.muted = muted;
-  }, [muted]);
+    // Only the active slide's video ever has sound.
+    if (video) video.muted = active ? muted : true;
+  }, [muted, active]);
 
   // Show or hide the captions track.
   useEffect(() => {
@@ -183,6 +184,7 @@ export function VideoStage({
       if (video && progressRef.current && video.duration > 0) {
         progressRef.current.style.transform = `scaleX(${video.currentTime / video.duration})`;
       }
+      if (backdrop && !backdrop.muted) backdrop.muted = true;
       if (video && backdrop && backdrop.readyState >= 2) {
         if (Math.abs(backdrop.currentTime - video.currentTime) > DRIFT_TOLERANCE_S) {
           backdrop.currentTime = video.currentTime;
@@ -233,7 +235,8 @@ export function VideoStage({
 
   const togglePause = useCallback(() => {
     const video = videoRef.current;
-    if (!video) return;
+    // A tap on a slide that is still scrolling into view must not start a second video.
+    if (!video || !activeRef.current) return;
     if (video.paused) {
       userPaused.current = false;
       video.play().then(
@@ -299,6 +302,7 @@ export function VideoStage({
       {/* Tap target covering the frame: tap toggles sound (or resumes if paused). */}
       <button
         type="button"
+        data-tap-target
         onClick={handleTap}
         onPointerDown={handlePointerDown}
         onPointerUp={clearHold}

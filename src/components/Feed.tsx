@@ -133,6 +133,25 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
     return () => clearTimeout(timer);
   }, [activeIndex, items.length, nextCursor, loadMore, error]);
 
+  // Only one video may ever play: if any video other than the active slide's
+  // starts (a stray tap, a late play() promise), stop it immediately.
+  useEffect(() => {
+    const onPlay = (event: Event) => {
+      const video = event.target;
+      if (!(video instanceof HTMLVideoElement)) return;
+      if (video.getAttribute("aria-hidden") === "true") {
+        video.muted = true; // blurred backdrop copy: always silent
+        return;
+      }
+      if (video.dataset.active !== "true") {
+        video.muted = true;
+        video.pause();
+      }
+    };
+    document.addEventListener("play", onPlay, true);
+    return () => document.removeEventListener("play", onPlay, true);
+  }, []);
+
   // Keyboard navigation for desktop.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -146,6 +165,13 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
         scroller.scrollBy({ top: -scroller.clientHeight, behavior: "smooth" });
       } else if (event.key === "m") {
         setMuted((value) => !value);
+      } else if (event.key === " ") {
+        // Space pauses or resumes the current video, like tapping it.
+        if (event.target instanceof HTMLButtonElement || event.target instanceof HTMLAnchorElement) return;
+        event.preventDefault();
+        scroller
+          .querySelector<HTMLButtonElement>(`section[data-index="${activeIndexRef.current}"] [data-tap-target]`)
+          ?.click();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -258,7 +284,7 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
         {slides}
 
         {loading && (
-          <div className="feed-slide grid place-items-center">
+          <div ref={observe(items.length)} data-index={items.length} className="feed-slide grid place-items-center">
             <div className="flex flex-col items-center gap-3 text-sm text-white/70">
               <span className="size-9 animate-spin rounded-full border-2 border-white/25 border-t-white" />
               Finding video explainers…
@@ -267,7 +293,7 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
         )}
 
         {error && !loading && (
-          <div className="feed-slide grid place-items-center px-8 text-center">
+          <div ref={observe(items.length)} data-index={items.length} className="feed-slide grid place-items-center px-8 text-center">
             <div className="flex max-w-sm flex-col items-center gap-3">
               <p className="text-base font-semibold">Couldn&apos;t reach alphaXiv</p>
               <p className="text-sm text-white/65">{error}</p>
@@ -283,7 +309,7 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
         )}
 
         {isEmpty && (
-          <div className="feed-slide grid place-items-center px-8 text-center">
+          <div ref={observe(items.length)} data-index={items.length} className="feed-slide grid place-items-center px-8 text-center">
             <div className="flex max-w-sm flex-col gap-2">
               <p className="text-base font-semibold">No video explainers right now</p>
               <p className="text-sm text-white/65">
@@ -295,7 +321,7 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
         )}
 
         {showEndCard && (
-          <div className="feed-slide grid place-items-center px-8 text-center">
+          <div ref={observe(items.length)} data-index={items.length} className="feed-slide grid place-items-center px-8 text-center">
             <div className="flex max-w-sm flex-col items-center gap-3">
               <p className="text-lg font-bold">You&apos;re all caught up</p>
               <p className="text-sm text-white/65">

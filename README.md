@@ -203,7 +203,7 @@ API. In that case the UI shows **Discuss**.
 | Gesture or key           | Action                                   |
 | ------------------------ | ---------------------------------------- |
 | Swipe / scroll, `↑` `↓` `j` `k` | Previous or next video            |
-| Tap the video            | Pause, showing mute, play and rotate buttons; tap again (or play) to resume and hide them |
+| Tap the video, `space`   | Pause, showing mute, play and rotate buttons; tap again (or play) to resume and hide them |
 | "Tap for sound", `m`     | Mute or unmute (applies to the whole feed) |
 | Press and hold the video | Play at 2x speed until you let go        |
 | Rotate (circular arrows, shown while paused) | Sideways mode: the feed turns 90° so you can hold your phone sideways. Swiping still moves between videos. Turning the phone itself also switches to the landscape layout |
