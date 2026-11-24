@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { VideoExplainer } from "@/lib/alphaxiv/types";
+import { primeVideosOnGesture } from "@/lib/media-unlock";
 import { PauseIcon, PlayIcon, RotateIcon, VolumeOffIcon, VolumeOnIcon } from "./icons";
 
 type Props = {
@@ -27,6 +28,12 @@ const DRIFT_TOLERANCE_S = 0.25;
 /** How long a press must last before it counts as a hold (2x speed) rather than a tap. */
 const HOLD_DELAY_MS = 280;
 const FAST_RATE = 2;
+const controlClass =
+  "grid size-11 place-items-center rounded-full bg-black/55 ring-1 ring-white/15 backdrop-blur transition active:scale-90";
+/** While the active video should be playing but isn't, try again this often. */
+const RETRY_MS = 600;
+/** Events that count as a user gesture for media playback on mobile browsers. */
+const GESTURE_EVENTS = ["pointerup", "touchend", "click", "keydown"] as const;
 
 
 function setCaptionMode(video: HTMLVideoElement | null, mode: TextTrackMode) {
@@ -79,12 +86,16 @@ export function VideoStage({
   const startPlayback = useCallback(() => {
     const video = videoRef.current;
     if (!video || !activeRef.current || !video.paused || userPaused.current) return;
+    // Some mobile browsers check the muted attribute, not just the property.
+    video.defaultMuted = true;
+    video.setAttribute("muted", "");
     video.muted = mutedRef.current;
     video.play().then(
       () => setPaused(false),
       (error: unknown) => {
         if (!(error instanceof DOMException)) return setPaused(true);
-        if (error.name === "AbortError") return; // interrupted by a load; onCanPlay retries
+        // Interrupted by a load: the retry loop and the load events try again.
+        if (error.name === "AbortError") return;
         if (error.name === "NotAllowedError" && !video.muted) {
           onAutoplayBlocked();
           video.muted = true;
@@ -113,23 +124,37 @@ export function VideoStage({
     if (video.currentTime > 0) video.currentTime = 0;
   }, [active, startPlayback]);
 
-  // If the browser refused to autoplay, start on the first touch, click or key press anywhere.
+  // Keep trying while the active video should be playing but isn't: a play()
+  // can be interrupted while the video loads, and some phones never fire the
+  // load event that would otherwise retry it. Also resume when the tab returns.
   useEffect(() => {
-    if (!active || !paused || userPaused.current) return;
+    if (!active) return;
+    const retry = () => {
+      const video = videoRef.current;
+      if (video?.paused && !userPaused.current && !document.hidden) startPlayback();
+    };
+    const timer = setInterval(retry, RETRY_MS);
+    document.addEventListener("visibilitychange", retry);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", retry);
+    };
+  }, [active, startPlayback]);
+
+  // If the browser refused to autoplay (e.g. iPhone Low Power Mode or an in-app
+  // browser), start on the next tap or key press anywhere. Touch *end* (not
+  // start) is what browsers count as a gesture that may start media.
+  useEffect(() => {
+    if (!active || !paused) return;
     const start = () => startPlayback();
-    const events = ["pointerdown", "keydown", "touchstart"] as const;
-    events.forEach((name) => window.addEventListener(name, start, { once: true, passive: true }));
-    return () => events.forEach((name) => window.removeEventListener(name, start));
+    GESTURE_EVENTS.forEach((name) => window.addEventListener(name, start, { capture: true, passive: true }));
+    return () =>
+      GESTURE_EVENTS.forEach((name) => window.removeEventListener(name, start, { capture: true }));
   }, [active, paused, startPlayback]);
 
-  // The muted *attribute* (not just the property) is what some mobile browsers
-  // check before allowing autoplay, and React doesn't render it.
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.defaultMuted = true;
-    video.setAttribute("muted", "");
-  }, []);
+  // Let every gesture also "unlock" the videos of nearby slides, so that
+  // browsers that only allow playback after a tap still autoplay them later.
+  useEffect(() => primeVideosOnGesture(GESTURE_EVENTS), []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -299,6 +324,7 @@ export function VideoStage({
         >
           <video
             ref={videoRef}
+            data-active={active ? "true" : undefined}
             className="h-full w-full bg-black object-contain"
             src={explainer.src}
             poster={explainer.poster ?? undefined}
@@ -315,6 +341,7 @@ export function VideoStage({
               setPaused(false);
               setFailed(false);
             }}
+            onLoadedData={startPlayback}
             onCanPlay={() => {
               setBuffering(false);
               // Retry autoplay if an earlier play() was interrupted while loading.
@@ -344,47 +371,44 @@ export function VideoStage({
         </div>
       </div>
 
-      {/* Reels-style controls on the video's corners: full screen (left); mute above pause (right). */}
+      {/* Video controls in one centered row: mute, pause, rotate. Below the video
+          in portrait; along the top of the video when sideways. */}
       {active && !failed && (
         <div className={`pointer-events-none absolute inset-x-0 ${frameTop} z-20 -translate-y-1/2`}>
           <div className="relative mx-auto aspect-video" style={frameStyle}>
-            {onToggleLandscape && (
-            <button
-              type="button"
-              onClick={onToggleLandscape}
-              className={`pointer-events-auto absolute grid size-9 place-items-center rounded-full bg-black/55 backdrop-blur transition active:scale-90 ${
-                landscape ? "top-2 right-2" : "bottom-2 left-2"
-              }`}
-              aria-label={landscape ? "Rotate back to portrait" : "Rotate to watch sideways"}
-              aria-pressed={landscape}
-            >
-              <RotateIcon size={18} />
-            </button>
-            )}
             <div
-              className={`pointer-events-auto absolute flex items-center gap-1.5 ${
-                landscape
-                  ? `top-2 flex-row ${onToggleLandscape ? "right-12" : "right-2"}`
-                  : "right-2 bottom-2 flex-col"
+              className={`pointer-events-auto absolute left-1/2 flex -translate-x-1/2 items-center gap-4 ${
+                landscape ? "top-3" : "top-full mt-3"
               }`}
             >
               <button
                 type="button"
                 onClick={onToggleMute}
-                className="grid size-7 place-items-center rounded-full bg-black/55 backdrop-blur transition active:scale-90"
+                className={controlClass}
                 aria-label={muted ? "Unmute" : "Mute"}
                 aria-pressed={!muted}
               >
-                {muted ? <VolumeOffIcon size={14} /> : <VolumeOnIcon size={14} />}
+                {muted ? <VolumeOffIcon size={20} /> : <VolumeOnIcon size={20} />}
               </button>
               <button
                 type="button"
                 onClick={togglePause}
-                className="grid size-9 place-items-center rounded-full bg-black/55 backdrop-blur transition active:scale-90"
+                className={controlClass}
                 aria-label={paused ? "Play" : "Pause"}
               >
-                {paused ? <PlayIcon size={18} /> : <PauseIcon size={18} />}
+                {paused ? <PlayIcon size={20} /> : <PauseIcon size={20} />}
               </button>
+              {onToggleLandscape && (
+                <button
+                  type="button"
+                  onClick={onToggleLandscape}
+                  className={controlClass}
+                  aria-label={landscape ? "Rotate back to portrait" : "Rotate to watch sideways"}
+                  aria-pressed={landscape}
+                >
+                  <RotateIcon size={20} />
+                </button>
+              )}
             </div>
           </div>
         </div>
