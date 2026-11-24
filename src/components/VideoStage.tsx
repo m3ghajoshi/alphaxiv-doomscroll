@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { VideoExplainer } from "@/lib/alphaxiv/types";
-import { PlayIcon, VolumeOffIcon, VolumeOnIcon } from "./icons";
+import { FullscreenIcon, PauseIcon, PlayIcon, VolumeOffIcon, VolumeOnIcon } from "./icons";
 
 type Props = {
   explainer: VideoExplainer;
@@ -23,6 +23,28 @@ const DRIFT_TOLERANCE_S = 0.25;
 /** How long a press must last before it counts as a hold (2x speed) rather than a tap. */
 const HOLD_DELAY_MS = 280;
 const FAST_RATE = 2;
+
+type FullscreenVideo = HTMLVideoElement & { webkitEnterFullscreen?: () => void };
+type LockableOrientation = ScreenOrientation & { lock?: (orientation: string) => Promise<void> };
+
+/**
+ * Plays the video full screen in landscape. Android/desktop use the Fullscreen
+ * API plus an orientation lock where allowed; iPhone Safari only supports its
+ * native video player (webkitEnterFullscreen), which rotates with the phone.
+ */
+async function enterLandscapeFullscreen(video: FullscreenVideo) {
+  if (typeof video.requestFullscreen === "function") {
+    try {
+      video.controls = true;
+      await video.requestFullscreen({ navigationUI: "hide" });
+      await (screen.orientation as LockableOrientation | undefined)?.lock?.("landscape").catch(() => undefined);
+      return;
+    } catch {
+      video.controls = false;
+    }
+  }
+  video.webkitEnterFullscreen?.();
+}
 
 function setCaptionMode(video: HTMLVideoElement | null, mode: TextTrackMode) {
   const track = video?.textTracks[0];
@@ -55,6 +77,7 @@ export function VideoStage({
   const [fast, setFast] = useState(false);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holding = useRef(false);
+  const userPaused = useRef(false);
   const activeRef = useRef(active);
   const mutedRef = useRef(muted);
 
@@ -70,7 +93,7 @@ export function VideoStage({
    */
   const startPlayback = useCallback(() => {
     const video = videoRef.current;
-    if (!video || !activeRef.current || !video.paused) return;
+    if (!video || !activeRef.current || !video.paused || userPaused.current) return;
     video.muted = mutedRef.current;
     video.play().then(
       () => setPaused(false),
@@ -99,6 +122,7 @@ export function VideoStage({
       startPlayback();
       return;
     }
+    userPaused.current = false;
     video.pause();
     video.playbackRate = 1;
     if (video.currentTime > 0) video.currentTime = 0;
@@ -193,6 +217,7 @@ export function VideoStage({
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) {
+      userPaused.current = false;
       video.play().then(
         () => setPaused(false),
         () => setPaused(true),
@@ -202,6 +227,42 @@ export function VideoStage({
     onToggleMute();
     setPulse((value) => value + 1);
   }, [onToggleMute]);
+
+  const togglePause = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      userPaused.current = false;
+      video.play().then(
+        () => setPaused(false),
+        () => setPaused(true),
+      );
+    } else {
+      userPaused.current = true;
+      video.pause();
+      setPaused(true);
+    }
+  }, []);
+
+  const openFullscreen = useCallback(() => {
+    const video = videoRef.current;
+    if (video) void enterLandscapeFullscreen(video);
+  }, []);
+
+  // Leaving full screen: hide native controls again and release the orientation lock.
+  useEffect(() => {
+    const onChange = () => {
+      if (document.fullscreenElement) return;
+      if (videoRef.current) videoRef.current.controls = false;
+      try {
+        screen.orientation?.unlock?.();
+      } catch {
+        // Not supported on this browser.
+      }
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
 
   const seek = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const video = videoRef.current;
@@ -299,6 +360,42 @@ export function VideoStage({
           )}
         </div>
       </div>
+
+      {/* Reels-style controls on the video's corners: full screen (left); mute above pause (right). */}
+      {active && !failed && (
+        <div className="pointer-events-none absolute inset-x-0 top-[30%] z-20 -translate-y-1/2">
+          <div className="relative mx-auto aspect-video w-full">
+            <button
+              type="button"
+              onClick={openFullscreen}
+              className="pointer-events-auto absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1.5 text-[11px] font-semibold backdrop-blur transition active:scale-95"
+              aria-label="Watch full screen"
+            >
+              <FullscreenIcon size={14} />
+              Full screen
+            </button>
+            <div className="pointer-events-auto absolute right-2 bottom-2 flex flex-col items-center gap-1.5">
+              <button
+                type="button"
+                onClick={onToggleMute}
+                className="grid size-7 place-items-center rounded-full bg-black/55 backdrop-blur transition active:scale-90"
+                aria-label={muted ? "Unmute" : "Mute"}
+                aria-pressed={!muted}
+              >
+                {muted ? <VolumeOffIcon size={14} /> : <VolumeOnIcon size={14} />}
+              </button>
+              <button
+                type="button"
+                onClick={togglePause}
+                className="grid size-9 place-items-center rounded-full bg-black/55 backdrop-blur transition active:scale-90"
+                aria-label={paused ? "Play" : "Pause"}
+              >
+                {paused ? <PlayIcon size={18} /> : <PauseIcon size={18} />}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {active && paused && !failed && (
         <div className="pointer-events-none absolute top-[30%] left-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/50 p-5">

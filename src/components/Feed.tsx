@@ -205,7 +205,7 @@ export function Feed({ initialPage, initialError, pageSize }: Props) {
             <div className="flex max-w-sm flex-col items-center gap-3">
               <p className="text-lg font-bold">You&apos;re all caught up</p>
               <p className="text-sm text-white/65">
-                ThatThat&apos;s every video explainer on alphaXiv&apos;s Hot and Most liked lists right now.apos;s every alphaXiv video explainer we could find right now.
+                That&apos;s every alphaXiv video explainer we could find right now.
               </p>
               <div className="flex gap-2">
                 <button

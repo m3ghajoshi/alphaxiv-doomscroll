@@ -94,3 +94,16 @@ export const EyeIcon = (props: IconProps) => (
     <circle cx="12" cy="12" r="3" />
   </Svg>
 );
+
+export const PauseIcon = (props: IconProps) => (
+  <Svg {...props}>
+    <rect x="6" y="4.5" width="4" height="15" rx="1" fill="currentColor" stroke="none" />
+    <rect x="14" y="4.5" width="4" height="15" rx="1" fill="currentColor" stroke="none" />
+  </Svg>
+);
+
+export const FullscreenIcon = (props: IconProps) => (
+  <Svg {...props}>
+    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+  </Svg>
+);

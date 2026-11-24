@@ -205,6 +205,8 @@ API. In that case the UI shows **Discuss**.
 | Swipe / scroll, `↑` `↓` `j` `k` | Previous or next video            |
 | Tap the video, `m`       | Mute or unmute (applies to the whole feed) |
 | Press and hold the video | Play at 2x speed until you let go        |
+| Pause button (bottom-right of the video) | Pause or resume; the smaller button above it mutes |
+| Full screen (bottom-left of the video)   | Watch landscape full screen; turn your phone sideways |
 | Tap the progress bar     | Seek                                     |
 | CC                       | Captions on or off (alphaXiv provides WebVTT) |
 | more / less              | Expand the summary                       |
