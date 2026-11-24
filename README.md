@@ -204,12 +204,14 @@ API. In that case the UI shows **Discuss**.
 | ------------------------ | ---------------------------------------- |
 | Swipe / scroll, `↑` `↓` `j` `k` | Previous or next video            |
 | Tap the video, `m`       | Mute or unmute (applies to the whole feed) |
+| Press and hold the video | Play at 2x speed until you let go        |
 | Tap the progress bar     | Seek                                     |
 | CC                       | Captions on or off (alphaXiv provides WebVTT) |
 | more / less              | Expand the summary                       |
 
-On iOS Safari, sound only plays after you tap. If the browser blocks sound, the feed switches back
-to muted autoplay rather than stopping.
+The first video starts playing (muted) as soon as the page loads. Browsers only allow sound after
+you tap, so if sound is blocked the feed switches back to muted autoplay rather than stopping. If a
+device blocks even muted autoplay (iOS Low Power Mode, for example), a play button appears.
 
 ## Deployment
 

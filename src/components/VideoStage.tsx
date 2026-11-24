@@ -20,6 +20,9 @@ type Props = {
 };
 
 const DRIFT_TOLERANCE_S = 0.25;
+/** How long a press must last before it counts as a hold (2x speed) rather than a tap. */
+const HOLD_DELAY_MS = 280;
+const FAST_RATE = 2;
 
 function setCaptionMode(video: HTMLVideoElement | null, mode: TextTrackMode) {
   const track = video?.textTracks[0];
@@ -49,35 +52,66 @@ export function VideoStage({
   const [failed, setFailed] = useState(false);
   const [paused, setPaused] = useState(false);
   const [pulse, setPulse] = useState(0);
+  const [fast, setFast] = useState(false);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holding = useRef(false);
+  const activeRef = useRef(active);
+  const mutedRef = useRef(muted);
 
-  // Play when active; pause and rewind when scrolled away.
+  useEffect(() => {
+    activeRef.current = active;
+    mutedRef.current = muted;
+  });
+
+  /**
+   * Starts playback of the active slide. Browsers allow muted autoplay; if sound
+   * is on and the browser refuses, fall back to muted. If even muted playback is
+   * refused (e.g. iOS Low Power Mode), show the play button.
+   */
+  const startPlayback = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || !activeRef.current || !video.paused) return;
+    video.muted = mutedRef.current;
+    video.play().then(
+      () => setPaused(false),
+      (error: unknown) => {
+        if (!(error instanceof DOMException)) return setPaused(true);
+        if (error.name === "AbortError") return; // interrupted by a load; onCanPlay retries
+        if (error.name === "NotAllowedError" && !video.muted) {
+          onAutoplayBlocked();
+          video.muted = true;
+          video.play().then(
+            () => setPaused(false),
+            () => setPaused(true),
+          );
+          return;
+        }
+        setPaused(true);
+      },
+    );
+  }, [onAutoplayBlocked]);
+
+  // Play when active (including the first slide on page load); pause and rewind when scrolled away.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (!active) {
-      video.pause();
-      if (video.currentTime > 0) video.currentTime = 0;
+    if (active) {
+      startPlayback();
       return;
     }
-    let cancelled = false;
-    video.muted = muted;
-    video.play().catch((error: unknown) => {
-      if (cancelled) return;
-      if (error instanceof DOMException && error.name === "NotAllowedError" && !video.muted) {
-        // Sound needs a fresh gesture on this device: fall back to muted autoplay.
-        onAutoplayBlocked();
-        video.muted = true;
-        video.play().catch(() => setPaused(true));
-      } else if (!(error instanceof DOMException && error.name === "AbortError")) {
-        setPaused(true);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-    // `muted` is applied by the effect below; re-running this would restart playback.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, onAutoplayBlocked]);
+    video.pause();
+    video.playbackRate = 1;
+    if (video.currentTime > 0) video.currentTime = 0;
+  }, [active, startPlayback]);
+
+  // The muted *attribute* (not just the property) is what some mobile browsers
+  // check before allowing autoplay, and React doesn't render it.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.defaultMuted = true;
+    video.setAttribute("muted", "");
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -106,6 +140,9 @@ export function VideoStage({
         if (Math.abs(backdrop.currentTime - video.currentTime) > DRIFT_TOLERANCE_S) {
           backdrop.currentTime = video.currentTime;
         }
+        if (backdrop.playbackRate !== video.playbackRate) {
+          backdrop.playbackRate = video.playbackRate;
+        }
         if (video.paused !== backdrop.paused) {
           if (video.paused) backdrop.pause();
           else backdrop.play().catch(() => undefined);
@@ -117,11 +154,49 @@ export function VideoStage({
     return () => cancelAnimationFrame(frame);
   }, [active]);
 
+  const setRate = useCallback((rate: number) => {
+    if (videoRef.current) videoRef.current.playbackRate = rate;
+    if (backdropRef.current) backdropRef.current.playbackRate = rate;
+    setFast(rate !== 1);
+  }, []);
+
+  const clearHold = useCallback(() => {
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+    if (holding.current) setRate(1);
+  }, [setRate]);
+
+  // Press and hold anywhere on the video for 2x speed; release to go back to 1x.
+  const handlePointerDown = useCallback(
+    (event: React.PointerEvent) => {
+      if (event.button !== 0) return;
+      holding.current = false;
+      if (holdTimer.current) clearTimeout(holdTimer.current);
+      holdTimer.current = setTimeout(() => {
+        const video = videoRef.current;
+        if (!video || video.paused) return;
+        holding.current = true;
+        setRate(FAST_RATE);
+      }, HOLD_DELAY_MS);
+    },
+    [setRate],
+  );
+
+  useEffect(() => () => clearHold(), [clearHold]);
+
   const handleTap = useCallback(() => {
+    // A hold just ended: it was a speed-up, not a tap.
+    if (holding.current) {
+      holding.current = false;
+      return;
+    }
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) {
-      video.play().then(() => setPaused(false)).catch(() => setPaused(true));
+      video.play().then(
+        () => setPaused(false),
+        () => setPaused(true),
+      );
       return;
     }
     onToggleMute();
@@ -166,6 +241,12 @@ export function VideoStage({
       <button
         type="button"
         onClick={handleTap}
+        onPointerDown={handlePointerDown}
+        onPointerUp={clearHold}
+        onPointerCancel={clearHold}
+        onPointerLeave={clearHold}
+        onContextMenu={(event) => event.preventDefault()}
+        style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
         className="absolute inset-0 z-10 cursor-pointer"
         aria-label={paused ? `Play explainer for ${title}` : muted ? "Unmute" : "Mute"}
       />
@@ -190,7 +271,11 @@ export function VideoStage({
               setPaused(false);
               setFailed(false);
             }}
-            onCanPlay={() => setBuffering(false)}
+            onCanPlay={() => {
+              setBuffering(false);
+              // Retry autoplay if an earlier play() was interrupted while loading.
+              startPlayback();
+            }}
             onError={() => setFailed(true)}
           >
             {explainer.captions && (
@@ -218,6 +303,12 @@ export function VideoStage({
       {active && paused && !failed && (
         <div className="pointer-events-none absolute top-[30%] left-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/50 p-5">
           <PlayIcon size={34} />
+        </div>
+      )}
+
+      {fast && (
+        <div className="pointer-events-none absolute top-28 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-sm font-bold backdrop-blur">
+          2x ▸▸
         </div>
       )}
 
